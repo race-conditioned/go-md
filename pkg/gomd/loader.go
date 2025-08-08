@@ -23,3 +23,5 @@ func LoadMD(fileName string) ([]byte, error) {
 	}
 	return bytes, nil
 }
+
+// TODO: handle permissions, more errors (eg can't open due to perms), and tests
