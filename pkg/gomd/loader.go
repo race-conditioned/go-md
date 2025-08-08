@@ -1,0 +1,25 @@
+package gomd
+
+import (
+	"fmt"
+	"os"
+)
+
+func WriteMD(fileName, text string) error {
+	err := os.WriteFile(fileName, []byte(text), 0666)
+	if err != nil {
+		return fmt.Errorf("Error writing file %s: %w", fileName, err)
+	}
+	return nil
+}
+
+func LoadMD(fileName string) ([]byte, error) {
+	bytes, err := os.ReadFile(fileName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("Filename %s does not exist: %w", fileName, err)
+		}
+		return nil, fmt.Errorf("Error loading file %s: %w", fileName, err)
+	}
+	return bytes, nil
+}
