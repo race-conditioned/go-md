@@ -6,28 +6,6 @@ import (
 	"strings"
 )
 
-type MarkDownFormat string
-
-const (
-	Slack   MarkDownFormat = "slack"
-	Discord MarkDownFormat = "discord"
-)
-
-type BuilderConfig struct {
-	format MarkDownFormat
-}
-
-type Element struct {
-	name     string
-	content  string
-	children []*Element
-}
-
-type Builder struct {
-	config BuilderConfig
-	output strings.Builder
-}
-
 // H1 is used to render a h1 markdown header.
 // It returns a pointer to an Element which can be used in the Generate function.
 func (b *Builder) H1(text string) *Element {
