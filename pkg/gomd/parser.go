@@ -14,9 +14,10 @@ var exampleText string = `# Header
 - 2
   - a
   - b
-    1. Ol inside?
+		1. Ol inside?
     2. yes indeed
 - [MSFT](https://microsoft.com)
+- c
 
 ---
 ooh noo
@@ -35,30 +36,37 @@ func ParseMD(md string, format MarkDownFormat) []*Element {
 	lines := strings.Split(md, "\n")
 	var elements []*Element
 	target := &elements
-	isElements := true
 	var parentStack []*Element
 
 	nestCount := 0
 	for _, line := range lines {
-		fmt.Println("len(ps)", len(parentStack))
 		// we allow for switching between the elements and children slices
-
-		isListItem, generation, name := identifyListedItem(line)
+		isListItem, generation, name, trimmed := identifyListedItem(line)
 		if isListItem {
+			line = trimmed
 			if nestCount < generation {
-				// we just nested so create a parent
-				fmt.Println("was elements:", isElements)
-				parent := &Element{name: name, children: []*Element{}}
-				parentStack = append(parentStack, parent)
-				*target = append(*target, parent)
-				target = &parent.children
-				isElements = false
+				var targetParent *Element
+				var rootParent *Element
+				// create as many parents as required and link them in lineage order, and keep a pointer to the root parent
+				for i := 0; i < generation-nestCount; i++ {
+					parent := &Element{name: name, children: []*Element{}}
+					if i == 0 {
+						rootParent = parent
+					} else {
+						targetParent.children = append(targetParent.children, parent)
+					}
+					targetParent = parent
+
+					parentStack = append(parentStack, parent)
+				}
+				// add the parent built with chidlren (if required) to the current target
+				*target = append(*target, rootParent)
+
+				// now we need to move the pointer to the most junior child
+				target = &parentStack[len(parentStack)-1].children
 				nestCount = generation
 			} else if nestCount > generation {
-				fmt.Println("len of parentstack:", len(parentStack))
-				fmt.Println("jumps back:", nestCount-generation)
 				for i := 0; i < nestCount-generation; i++ {
-					// pop a parent from the stack
 					parentStack = parentStack[:len(parentStack)-1]
 				}
 				nestCount = generation
@@ -68,20 +76,12 @@ func ParseMD(md string, format MarkDownFormat) []*Element {
 				} else {
 					target = &elements
 				}
-
-				isElements = true
 			}
-			// fmt.Println("found Item!", isListItem, generation, line)
 		} else {
-			// fmt.Println("not list Item")
-			// wipe the parent stack?
 			parentStack = []*Element{}
 			nestCount = 0
 			target = &elements
-			isElements = true
 		}
-
-		fmt.Println("isElements:", isElements, "|", line)
 
 		if processHeader(target, line) ||
 			processHorizontalRule(target, line) ||
@@ -93,9 +93,8 @@ func ParseMD(md string, format MarkDownFormat) []*Element {
 	return elements
 }
 
-func identifyListedItem(line string) (bool, int, string) {
-	// check for the first character being a number or hyphen
-	trimmed := strings.TrimLeft(line, " ")
+func identifyListedItem(line string) (bool, int, string, string) {
+	trimmed := strings.TrimLeft(line, " \t")
 	name := ""
 	if len(trimmed) >= 2 && trimmed[0] == '-' && trimmed[1] == ' ' {
 		name = "ul"
@@ -107,22 +106,27 @@ func identifyListedItem(line string) (bool, int, string) {
 		name = "ol"
 	}
 	if len(name) > 0 {
-		// we have a list item
-		// so we need to count the left hand spaces and divide by 2
 		spaceCount := 0
-		for i, r := range line {
-			if r != ' ' {
-				spaceCount = i
+		for _, r := range line {
+			if string(r) == "\t" {
+				spaceCount += 2
+			} else if r == ' ' {
+				spaceCount += 1
+			} else {
 				break
 			}
 		}
 
-		return true, (spaceCount / 2) + 1, name
+		if name == "ul" {
+			trimmed = trimmed[2:]
+		} else {
+			trimmed = trimmed[3:]
+		}
 
+		return true, (spaceCount / 2) + 1, name, trimmed
 	}
 
-	// not a list item
-	return false, 0, ""
+	return false, 0, "", ""
 }
 
 // processHeader determines if the line has a valid header by counting hashes and checking for a space that follows immediately.
