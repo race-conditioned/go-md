@@ -101,7 +101,10 @@ func (b *Builder) NLs(count int) *Element {
 // This allows for custom nesting.
 // Any Element (including a UL Element) can be nested in a UL.
 func (b *Builder) UL(children ...*Element) *Element {
-	return &Element{name: "ul", children: children}
+	if len(children) > 0 {
+		return &Element{name: "ul", children: children}
+	}
+	return nil
 }
 
 // OL is used to begin rendering an ordered list.
@@ -203,8 +206,58 @@ func (b *Builder) crawlContent(el *Element, prefix string, iteration *struct{ nu
 // It uses a recursive crawl function to convert each Element content into an equivalent in markdown.
 func (b *Builder) Generate(elements ...*Element) string {
 	for _, el := range elements {
+		if el == nil {
+			continue
+		}
 		iteration := &struct{ num int }{num: 0}
 		b.crawlContent(el, "", iteration)
 	}
 	return b.output.String()
 }
+
+// Example Usage
+/*
+func main() {
+	brandName := "X Company"
+	b := Builder{}
+	header := []*Element{
+		b.H1(fmt.Sprintf("My %s Document", brandName)),
+		b.NL(),
+		b.Textln("great!"),
+		b.NL(),
+		b.UL(
+			b.Textln("first"),
+			b.Textln("second"),
+			b.OL(
+				b.Bold("first"),
+				b.Textln(" element"),
+			),
+		),
+	}
+
+	body := []*Element{
+		b.Text("This is the body"),
+	}
+
+	template := []*Element{}
+	template = append(template, header...)
+	template = append(template, b.NL())
+	template = append(template, body...)
+
+	md := b.Generate(template...)
+	err := WriteMD("xcompany.md", md)
+	if err != nil {
+		fmt.Println("Error: ", err.Error())
+	}
+}
+// OUTPUT
+// # My X Company Document
+//
+// great!
+//
+// - first
+// - second
+// 	1. **first** element
+//
+// This is the body
+*/

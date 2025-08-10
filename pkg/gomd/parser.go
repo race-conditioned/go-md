@@ -14,10 +14,10 @@ var exampleText string = `# Header
 - 2
   - a
   - b
-		1. Ol inside?
+		1. **Ol** inside?
     2. yes indeed
 - [MSFT](https://microsoft.com)
-- c
+  - c
 
 ---
 ooh noo
@@ -39,7 +39,10 @@ func ParseMD(md string, format MarkDownFormat) []*Element {
 	var parentStack []*Element
 
 	nestCount := 0
-	for _, line := range lines {
+	for i, line := range lines {
+		if len(line) == 0 && i < len(lines)-1 {
+			elements = append(elements, &Element{name: "nl", content: "\n"})
+		}
 		// we allow for switching between the elements and children slices
 		isListItem, generation, name, trimmed := identifyListedItem(line)
 		if isListItem {
@@ -152,7 +155,7 @@ func processHeader(elements *[]*Element, line string) bool {
 		}
 
 		if isHeader {
-			*elements = append(*elements, &Element{name: fmt.Sprintf("h%d", hashCount), content: strings.TrimLeft(line, "# ")})
+			*elements = append(*elements, &Element{name: fmt.Sprintf("h%d", hashCount), content: strings.TrimLeft(line, "# ") + "\n"})
 			return isHeader
 		}
 	}
@@ -176,12 +179,227 @@ func processHorizontalRule(elements *[]*Element, line string) bool {
 	return false
 }
 
+type IndexChar struct {
+	i int
+	c rune
+}
+
 func processVariableLine(elements *[]*Element, line string) bool {
-	// check if it's a bland line?
-	// if !strings.ContainsAny(line, "*`[()]") {
-	// it's a clean text?
-	// no OL and UL check
-	*elements = append(*elements, &Element{name: "line", content: line})
-	//}
+	ruleString := "!*`[()]"
+	// first populate indexes of special characters
+	specialChars := []*IndexChar{}
+	for i, r := range line {
+		if strings.Contains(ruleString, string(r)) {
+			specialChars = append(specialChars, &IndexChar{i: i, c: r})
+		}
+	}
+
+	// build a cache that gets flushed to the element content
+	cache := []byte{}
+	// now we can go one by one in the line and push each rune to the cache, until we hit a special char
+	// then we need to identify if the special char is marks an element
+	// if so we push the cache to a Text element (if not empty)
+	// Then we can collect the special element
+	// then continue if there is text that remains
+	// if not, then we can make the final element a ln version (if not an image)
+	for basePointer, lookAheadPointer := 0, 0; basePointer < len(line)-1; basePointer++ {
+		char := string(line[basePointer])
+		if strings.Contains(ruleString, char) {
+			// look ahead for closer?
+			if char == "*" {
+				// is the next char a *? if so it's bold opener
+				if line[basePointer+1] == '*' {
+
+					// let's unshift 2 elements from specialChars
+					specialChars = specialChars[2:]
+					// it's bold
+					// let's look ahead
+					found := false
+
+					// look for closer
+					for _, indexChar := range specialChars {
+						if indexChar.c == '*' {
+							lookAheadPointer = indexChar.i
+							found = true
+							break
+						}
+					}
+
+					if found && line[lookAheadPointer+1] == '*' {
+						// now we have a range of text in the bold between the basePointer and lookAheadPointer that is bold
+						boldText := line[basePointer+2 : lookAheadPointer]
+						if len(cache) != 0 {
+							*elements = append(*elements, &Element{name: "text", content: string(cache)})
+							cache = []byte{}
+						}
+						// are there more chars?
+						if lookAheadPointer+1 == len(line)-1 {
+							// no
+							*elements = append(*elements, &Element{name: "boldln", content: boldText + "\n"})
+							break
+						} else {
+							// yes
+							*elements = append(*elements, &Element{name: "bold", content: boldText})
+						}
+						// remove the further double * from specialChars
+
+						newSpecialChars := []*IndexChar{}
+						count := 0
+						for i, specialChar := range specialChars {
+							if count == 2 {
+								newSpecialChars = append(newSpecialChars, specialChars[i:]...)
+								break
+							}
+							if specialChar.c == '*' {
+								count++
+							} else {
+								newSpecialChars = append(newSpecialChars, specialChar)
+							}
+						}
+						specialChars = newSpecialChars
+						basePointer = lookAheadPointer + 1
+					} else {
+						// we can ignore the * character, and the following one
+						cache = append(cache, line[basePointer], line[basePointer+1])
+						basePointer++
+					}
+					continue
+				} else {
+					// it's italic
+					// let's unshift 2 elements from specialChars
+					specialChars = specialChars[1:]
+					// it's bold
+					// let's look ahead
+					found := false
+					for _, indexChar := range specialChars {
+						if indexChar.c == '*' {
+							lookAheadPointer = indexChar.i
+							found = true
+							break
+						}
+					}
+					if found {
+						italicText := line[basePointer+1 : lookAheadPointer]
+						if len(cache) != 0 {
+							*elements = append(*elements, &Element{name: "text", content: string(cache)})
+							cache = []byte{}
+						}
+						// are there more chars?
+						if lookAheadPointer == len(line)-1 {
+							// no
+							*elements = append(*elements, &Element{name: "italicln", content: italicText + "\n"})
+							break
+						} else {
+							// yes
+							*elements = append(*elements, &Element{name: "italic", content: italicText})
+						}
+						newSpecialChars := []*IndexChar{}
+						count := 0
+						for i, specialChar := range specialChars {
+							if count == 1 {
+								newSpecialChars = append(newSpecialChars, specialChars[i:]...)
+								break
+							}
+							if specialChar.c == '*' {
+								count++
+							} else {
+								newSpecialChars = append(newSpecialChars, specialChar)
+							}
+						}
+						specialChars = newSpecialChars
+						basePointer = lookAheadPointer
+					} else {
+						// we can ignore the * character, and the following one
+						cache = append(cache, line[basePointer])
+					}
+					continue
+				}
+			} else {
+				// not bold and not italic
+				if char == "[" {
+					// link
+					specialChars = specialChars[1:]
+					// WARN: I will ignore internal bold and italics for now
+
+					found := false
+					tempLookAheadPointer := 0
+					display := ""
+					for _, indexChar := range specialChars {
+						if indexChar.c == ']' {
+							found = true
+							tempLookAheadPointer = indexChar.i
+							break
+						}
+					}
+					if found && string(line[tempLookAheadPointer+1]) == "(" {
+						// ok we have a square brackets enclosed text
+						display = line[basePointer+1 : tempLookAheadPointer]
+
+						// continue the same again but for parenthesis
+						foundLink := false
+						link := ""
+
+						for _, indexChar := range specialChars {
+							if indexChar.i <= tempLookAheadPointer+1 {
+								continue
+							}
+							if indexChar.c == ')' {
+								foundLink = true
+								lookAheadPointer = indexChar.i
+								break
+							}
+						}
+						if foundLink {
+							link = line[tempLookAheadPointer+2 : lookAheadPointer]
+							// we definitely have a link
+							if lookAheadPointer == len(line)-1 {
+								// no
+								*elements = append(*elements, &Element{name: "linkln", content: fmt.Sprintf("[%s](%s)\n", display, link)})
+								break
+							} else {
+								// yes
+								*elements = append(*elements, &Element{name: "link", content: fmt.Sprintf("[%s](%s) ", display, link)})
+							}
+							newSpecialChars := []*IndexChar{}
+							count := 0
+							foundClosingSquare := false
+							for i, specialChar := range specialChars {
+								if count == 1 {
+									newSpecialChars = append(newSpecialChars, specialChars[i:]...)
+									break
+								}
+								if specialChar.c == ']' {
+									foundClosingSquare = true
+								}
+								if specialChar.c == ')' && foundClosingSquare {
+									count++
+								} else {
+									newSpecialChars = append(newSpecialChars, specialChar)
+								}
+							}
+							specialChars = newSpecialChars
+							basePointer = lookAheadPointer
+						} else {
+							cache = append(cache, line[basePointer])
+							continue
+						}
+					} else {
+						cache = append(cache, line[basePointer])
+						continue
+					}
+
+					// and then check for immediate re open parenthesis
+					// and then check for close
+				} else if char == "!" {
+					// TODO: images
+				}
+			}
+		}
+		cache = append(cache, line[basePointer])
+	}
+	if len(cache) != 0 || len(line) == 1 {
+		*elements = append(*elements, &Element{name: "textln", content: string(cache) + string(line[len(line)-1]) + "\n"})
+	}
+
 	return false
 }
