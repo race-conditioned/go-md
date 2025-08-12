@@ -72,13 +72,13 @@ func (b *Builder) Boldln(text string) *Element {
 // If you want to end the italic text with a newline, use the Italicln method on gomd.Builder.
 // It returns a pointer to an Element which can be used in the Generate function.
 func (b *Builder) Italic(text string) *Element {
-	return &Element{name: "italic", content: fmt.Sprintf("*%s*", text)}
+	return &Element{name: "italic", content: fmt.Sprintf("_%s_", text)}
 }
 
 // Italicln is used to render italic text.
 // It returns a pointer to an Element which can be used in the Generate function.
 func (b *Builder) Italicln(text string) *Element {
-	return &Element{name: "italicln", content: fmt.Sprintf("*%s*\n", text)}
+	return &Element{name: "italicln", content: fmt.Sprintf("_%s_\n", text)}
 }
 
 // NL is used to render a newline.
@@ -137,7 +137,7 @@ func (b *Builder) Img(alt, link string) *Element {
 // Rule is used to render a horizonatl rule.
 // It returns a pointer to an Element which can be used in the Generate function.
 func (b *Builder) Rule() *Element {
-	return &Element{name: "rule", content: "---\n"}
+	return &Element{name: "rule", content: "\n---\n\n"}
 }
 
 // Code is used to render an unfenced code block.
@@ -155,17 +155,19 @@ func (b *Builder) Codeln(text string) *Element {
 
 // crawlContent is used to parse an Element and recurse through the associated children Elements.
 // It converts Element pointers into compatible markdown text and handles nesting.
-func (b *Builder) crawlContent(el *Element, prefix string, iteration *struct{ num int }) {
+func (b *Builder) crawlContent(el *Element, prefix string, iteration *struct{ num int }, isPrefix *struct{ is bool }) {
 	if el != nil {
 
+		nextPrefix := false
 		newIteration := &struct{ num int }{num: 0}
 		outStr := ""
 
 		switch el.name {
-		case "h1", "h2", "h3", "h4", "h5":
+		case "h1", "h2", "h3", "h4", "h5", "h6":
 			level, _ := strconv.Atoi(strings.Split(el.name, "")[1])
 			hashes := strings.Repeat("#", level)
 			outStr = hashes + " " + el.content
+			nextPrefix = true
 		case "ul":
 			if strings.Contains(prefix, "-") {
 				prefix = "  " + prefix
@@ -179,40 +181,83 @@ func (b *Builder) crawlContent(el *Element, prefix string, iteration *struct{ nu
 			} else {
 				prefix += "- "
 			}
+		case "textln", "boldln", "italicln", "linkln", "codeln":
+			nextPrefix = true
+			fallthrough
 		default:
 			outStr = el.content
 		}
 
 		outPrefix := prefix
-		if iteration.num != 0 {
+		if iteration.num != 0 && isPrefix.is {
 			spaces := strings.Repeat(" ", len(prefix)-2)
 			outPrefix = fmt.Sprintf("%s%d. ", spaces, iteration.num)
 			iteration.num++
 		}
 
 		if len(outStr) != 0 {
-			b.output.WriteString(outPrefix + outStr)
+			if isPrefix.is {
+				outStr = outPrefix + outStr
+			}
+			b.output.WriteString(outStr)
 		}
+		isPrefix.is = nextPrefix
 
+		isChildPrefix := &struct{ is bool }{is: true}
 		for _, child := range el.children {
-			b.crawlContent(child, prefix, newIteration)
+			b.crawlContent(child, prefix, newIteration, isChildPrefix)
 		}
 
 		return
 	}
 }
 
+// collapseRuns returns s with any run of '\n' longer than max reduced to max.
+func collapseRuns(s string, max int) string {
+	if max < 1 {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	run := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			if run < max {
+				b.WriteByte('\n')
+			}
+			run++
+		} else {
+			run = 0
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
+}
+
 // Generate consumes Element pointers.
 // It uses a recursive crawl function to convert each Element content into an equivalent in markdown.
 func (b *Builder) Generate(elements ...*Element) string {
+	iteration := &struct{ num int }{num: 0}
+	isPrefix := &struct{ is bool }{is: true}
 	for _, el := range elements {
 		if el == nil {
 			continue
 		}
-		iteration := &struct{ num int }{num: 0}
-		b.crawlContent(el, "", iteration)
+		b.crawlContent(el, "", iteration, isPrefix)
 	}
-	return b.output.String()
+
+	s := b.output.String()
+	b.output.Reset()
+
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.TrimLeft(s, "\n")
+	s = collapseRuns(s, 2)
+	s = strings.TrimRight(s, " \t")
+	if !strings.HasSuffix(s, "\n") {
+		s += "\n"
+	}
+
+	return s
 }
 
 // Example Usage

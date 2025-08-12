@@ -186,7 +186,6 @@ type IndexChar struct {
 
 func processVariableLine(elements *[]*Element, line string) bool {
 	ruleString := "!*`[()]"
-	// first populate indexes of special characters
 	specialChars := []*IndexChar{}
 	for i, r := range line {
 		if strings.Contains(ruleString, string(r)) {
@@ -194,14 +193,7 @@ func processVariableLine(elements *[]*Element, line string) bool {
 		}
 	}
 
-	// build a cache that gets flushed to the element content
 	cache := []byte{}
-	// now we can go one by one in the line and push each rune to the cache, until we hit a special char
-	// then we need to identify if the special char is marks an element
-	// if so we push the cache to a Text element (if not empty)
-	// Then we can collect the special element
-	// then continue if there is text that remains
-	// if not, then we can make the final element a ln version (if not an image)
 	for basePointer, lookAheadPointer := 0, 0; basePointer < len(line)-1; basePointer++ {
 		char := string(line[basePointer])
 		if strings.Contains(ruleString, char) {
