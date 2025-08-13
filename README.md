@@ -19,7 +19,8 @@ You can see the usage in the `example` directory.
 Here is An example of using the Builder for raw constructions:
 
 ```go
- package main
+ 
+package main
 
 import (
 	"fmt"
@@ -27,7 +28,7 @@ import (
 	"github.com/race-conditioned/go-md/pkg/gomd"
 )
 
-	func main() {
+func main() {
 	brandName := "X Company"
 	b := gomd.Builder{}
 	header := []*gomd.Element{
