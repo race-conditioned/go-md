@@ -153,62 +153,93 @@ func (b *Builder) Codeln(text string) *Element {
 	return &Element{name: "code", content: fmt.Sprintf("`%s`\n", text)}
 }
 
+type ParentInfo struct {
+	iter                 int
+	isPrefix             bool
+	olParent             bool
+	firstParent          string
+	firstParentOLhandled bool
+}
+
 // crawlContent is used to parse an Element and recurse through the associated children Elements.
 // It converts Element pointers into compatible markdown text and handles nesting.
-func (b *Builder) crawlContent(el *Element, prefix string, iteration *struct{ num int }, isPrefix *struct{ is bool }) {
-	if el != nil {
-
-		nextPrefix := false
-		newIteration := &struct{ num int }{num: 0}
-		outStr := ""
-
-		switch el.name {
-		case "h1", "h2", "h3", "h4", "h5", "h6":
-			level, _ := strconv.Atoi(strings.Split(el.name, "")[1])
-			hashes := strings.Repeat("#", level)
-			outStr = hashes + " " + el.content
-			nextPrefix = true
-		case "ul":
-			if strings.Contains(prefix, "-") {
-				prefix = "  " + prefix
-			} else {
-				prefix += "- "
-			}
-		case "ol":
-			newIteration.num++
-			if strings.Contains(prefix, "-") {
-				prefix = "  " + prefix
-			} else {
-				prefix += "- "
-			}
-		case "textln", "boldln", "italicln", "linkln", "codeln":
-			nextPrefix = true
-			fallthrough
-		default:
-			outStr = el.content
-		}
-
-		outPrefix := prefix
-		if iteration.num != 0 && isPrefix.is {
-			spaces := strings.Repeat(" ", len(prefix)-2)
-			outPrefix = fmt.Sprintf("%s%d. ", spaces, iteration.num)
-			iteration.num++
-		}
-
-		if len(outStr) != 0 {
-			if isPrefix.is {
-				outStr = outPrefix + outStr
-			}
-			b.output.WriteString(outStr)
-		}
-		isPrefix.is = nextPrefix
-
-		isChildPrefix := &struct{ is bool }{is: true}
-		for _, child := range el.children {
-			b.crawlContent(child, prefix, newIteration, isChildPrefix)
-		}
-
+func (b *Builder) crawlContent(el *Element, prefix string, parentInfo *ParentInfo, level int) {
+	if el == nil {
 		return
+	}
+
+	nextPrefix := false
+	newIteration := 0
+	outStr := ""
+	olParent := false
+
+	// 1) Derive root list kind for *this* node
+	rootKind := parentInfo.firstParent // carry over
+	if rootKind == "" && (el.name == "ul" || el.name == "ol") {
+		rootKind = el.name
+	}
+
+	switch el.name {
+	case "h1", "h2", "h3", "h4", "h5", "h6":
+		level, _ := strconv.Atoi(strings.TrimPrefix(el.name, "h"))
+		outStr = strings.Repeat("#", level) + " " + el.content
+		nextPrefix = true
+
+	case "ul":
+		if !parentInfo.olParent {
+			if strings.Contains(prefix, "-") {
+				prefix = "  " + prefix
+			} else {
+				prefix += "- "
+			}
+		}
+
+	case "ol":
+		newIteration++
+		if strings.Contains(prefix, "-") {
+			prefix = "  " + prefix
+		} else {
+			prefix += "- "
+		}
+		olParent = true
+
+	case "textln", "boldln", "italicln", "linkln", "codeln":
+		nextPrefix = true
+		fallthrough
+	default:
+		outStr = el.content
+	}
+
+	outPrefix := prefix
+	if parentInfo.iter != 0 && parentInfo.isPrefix && len(prefix) >= 2 {
+		spaces := strings.Repeat(" ", len(prefix)-2)
+		outPrefix = fmt.Sprintf("%s%d. ", spaces, parentInfo.iter)
+		parentInfo.iter++
+	}
+
+	if rootKind == "ol" && !parentInfo.firstParentOLhandled && level == 3 {
+		b.output.WriteString("\n")
+		parentInfo.firstParentOLhandled = true
+	}
+
+	if outStr != "" {
+		if parentInfo.isPrefix {
+			outStr = outPrefix + outStr
+		}
+		b.output.WriteString(outStr)
+	}
+	parentInfo.isPrefix = nextPrefix
+
+	childInfo := &ParentInfo{
+		iter:                 newIteration,
+		isPrefix:             true,
+		olParent:             olParent,
+		firstParent:          rootKind,
+		firstParentOLhandled: parentInfo.firstParentOLhandled,
+	}
+
+	for _, child := range el.children {
+		b.crawlContent(child, prefix, childInfo, level+1)
 	}
 }
 
@@ -236,14 +267,13 @@ func collapseRuns(s string, max int) string {
 
 // Generate consumes Element pointers.
 // It uses a recursive crawl function to convert each Element content into an equivalent in markdown.
-func (b *Builder) Generate(elements ...*Element) string {
-	iteration := &struct{ num int }{num: 0}
-	isPrefix := &struct{ is bool }{is: true}
+func (b *Builder) Build(elements ...*Element) string {
+	parentInfo := &ParentInfo{iter: 0, isPrefix: true, olParent: false, firstParent: ""}
 	for _, el := range elements {
 		if el == nil {
 			continue
 		}
-		b.crawlContent(el, "", iteration, isPrefix)
+		b.crawlContent(el, "", parentInfo, 1)
 	}
 
 	s := b.output.String()
@@ -256,11 +286,14 @@ func (b *Builder) Generate(elements ...*Element) string {
 	if !strings.HasSuffix(s, "\n") {
 		s += "\n"
 	}
+	if strings.HasSuffix(s, "\n\n") {
+		s = s[:len(s)-1]
+	}
 
 	return s
 }
 
-// Example Usage
+// Raw Builder Example Usage
 /*
 func main() {
 	brandName := "X Company"
@@ -306,3 +339,59 @@ func main() {
 //
 // This is the body
 */
+
+func (c *Compounder) Section(h func(string) *Element, title string, paras ...string) []*Element {
+	out := []*Element{
+		h(title),
+		c.builder.NL(),
+	}
+
+	for _, p := range paras {
+		out = append(out, c.builder.Textln(p), c.builder.NL())
+	}
+
+	return out
+}
+
+func (c *Compounder) Header(level int, text string) []*Element {
+	if level < 1 {
+		level = 1
+	}
+	if level > 6 {
+		level = 6
+	}
+	headers := map[int]func(string) *Element{
+		1: c.builder.H1,
+		2: c.builder.H2,
+		3: c.builder.H3,
+		4: c.builder.H4,
+		5: c.builder.H5,
+		6: c.builder.H6,
+	}
+
+	return []*Element{headers[level](text), c.builder.NL()}
+}
+
+func (c *Compounder) UL(texts ...string) []*Element {
+	children := []*Element{}
+	for _, text := range texts {
+		children = append(children, c.builder.Textln(text))
+	}
+	return []*Element{c.builder.UL(children...), c.builder.NL()}
+}
+
+func (c *Compounder) OL(texts ...string) []*Element {
+	children := []*Element{}
+	for _, text := range texts {
+		children = append(children, c.builder.Textln(text))
+	}
+	return []*Element{c.builder.OL(children...), c.builder.NL()}
+}
+
+func (c *Compounder) Compound(groups ...[]*Element) []*Element {
+	out := []*Element{}
+	for _, g := range groups {
+		out = append(out, g...)
+	}
+	return out
+}

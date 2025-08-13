@@ -23,3 +23,7 @@ type Builder struct {
 	config BuilderConfig
 	output strings.Builder
 }
+
+type Compounder struct {
+	builder Builder
+}

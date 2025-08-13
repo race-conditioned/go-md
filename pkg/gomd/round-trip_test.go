@@ -25,7 +25,7 @@ func TestRoundTrip(t *testing.T) {
 	orig := []*Element{
 		b.H1("Header test"),
 	}
-	md := b.Generate(orig...)
+	md := b.Build(orig...)
 	got := ParseMD(md, "")
 
 	opts := []cmp.Option{
@@ -38,7 +38,7 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-// // Property: Generate -> Parse equals original AST (after nil/empty normalization).
+// // Property: Build -> Parse equals original AST (after nil/empty normalization).
 // func FuzzRoundTripElements(f *testing.F) {
 // 	f.Add(uint64(1)) // seeds for reproducibility
 // 	f.Add(uint64(2))
@@ -46,7 +46,7 @@ func TestRoundTrip(t *testing.T) {
 // 		r := rand.New(rand.NewSource(seed))
 // 		b := &Builder{}
 // 		orig := genTree(r, 0)     // random elements
-// 		md := b.Generate(orig...) // under test
+// 		md := b.Build(orig...) // under test
 // 		got := ParseMD(md, "")    // round-trip
 //
 // 		opts := []cmp.Option{
