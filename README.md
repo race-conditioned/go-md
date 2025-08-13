@@ -19,7 +19,15 @@ You can see the usage in the `example` directory.
 Here is An example of using the Builder for raw constructions:
 
 ```go
- func main() {
+ package main
+
+import (
+	"fmt"
+
+	"github.com/race-conditioned/go-md/pkg/gomd"
+)
+
+	func main() {
 	brandName := "X Company"
 	b := gomd.Builder{}
 	header := []*gomd.Element{
@@ -47,7 +55,7 @@ Here is An example of using the Builder for raw constructions:
 	template = append(template, body...)
 
 	md := b.Generate(template...)
-	err := Write("xcompany.md", md)
+	err := gomd.Write("xcompany.md", md)
 	if err != nil {
 		fmt.Println("Error: ", err.Error())
 	}

@@ -6,7 +6,15 @@ import (
 	"github.com/race-conditioned/go-md/pkg/gomd"
 )
 
-var exampleUsage = `func main() {
+var exampleUsage = `package main
+
+import (
+	"fmt"
+
+	"github.com/race-conditioned/go-md/pkg/gomd"
+)
+
+	func main() {
 	brandName := "X Company"
 	b := gomd.Builder{}
 	header := []*gomd.Element{
@@ -34,7 +42,7 @@ var exampleUsage = `func main() {
 	template = append(template, body...)
 
 	md := b.Generate(template...)
-	err := Write("xcompany.md", md)
+	err := gomd.Write("xcompany.md", md)
 	if err != nil {
 		fmt.Println("Error: ", err.Error())
 	}
