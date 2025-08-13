@@ -343,11 +343,11 @@ func main() {
 func (c *Compounder) Section(h func(string) *Element, title string, paras ...string) []*Element {
 	out := []*Element{
 		h(title),
-		c.builder.NL(),
+		c.Builder.NL(),
 	}
 
 	for _, p := range paras {
-		out = append(out, c.builder.Textln(p), c.builder.NL())
+		out = append(out, c.Builder.Textln(p), c.Builder.NL())
 	}
 
 	return out
@@ -361,31 +361,31 @@ func (c *Compounder) Header(level int, text string) []*Element {
 		level = 6
 	}
 	headers := map[int]func(string) *Element{
-		1: c.builder.H1,
-		2: c.builder.H2,
-		3: c.builder.H3,
-		4: c.builder.H4,
-		5: c.builder.H5,
-		6: c.builder.H6,
+		1: c.Builder.H1,
+		2: c.Builder.H2,
+		3: c.Builder.H3,
+		4: c.Builder.H4,
+		5: c.Builder.H5,
+		6: c.Builder.H6,
 	}
 
-	return []*Element{headers[level](text), c.builder.NL()}
+	return []*Element{headers[level](text), c.Builder.NL()}
 }
 
 func (c *Compounder) UL(texts ...string) []*Element {
 	children := []*Element{}
 	for _, text := range texts {
-		children = append(children, c.builder.Textln(text))
+		children = append(children, c.Builder.Textln(text))
 	}
-	return []*Element{c.builder.UL(children...), c.builder.NL()}
+	return []*Element{c.Builder.UL(children...), c.Builder.NL()}
 }
 
 func (c *Compounder) OL(texts ...string) []*Element {
 	children := []*Element{}
 	for _, text := range texts {
-		children = append(children, c.builder.Textln(text))
+		children = append(children, c.Builder.Textln(text))
 	}
-	return []*Element{c.builder.OL(children...), c.builder.NL()}
+	return []*Element{c.Builder.OL(children...), c.Builder.NL()}
 }
 
 func (c *Compounder) Compound(groups ...[]*Element) []*Element {

@@ -99,7 +99,7 @@ func TestSimpleBuilderCases(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			want, err := LoadMD("testdata/" + tc.path)
+			want, err := Read("testdata/" + tc.path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,7 +112,7 @@ func TestSimpleBuilderCases(t *testing.T) {
 
 func TestCompoundCases(t *testing.T) {
 	b := Builder{}
-	c := Compounder{builder: b}
+	c := Compounder{Builder: b}
 
 	comp := "langfire"
 	footer := footer(comp)
@@ -160,7 +160,7 @@ func TestCompoundCases(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			want, err := LoadMD("testdata/compound/" + tc.path)
+			want, err := Read("testdata/compound/" + tc.path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -259,12 +259,12 @@ func TestDeepNesting(t *testing.T) {
 		// 	},
 	}
 
-	_ = WriteMD("check.md", cases[1].got)
+	_ = Write("check.md", cases[1].got)
 
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			want, err := LoadMD("testdata/nesting/" + tc.path)
+			want, err := Read("testdata/nesting/" + tc.path)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-func WriteMD(fileName, text string) error {
+func Write(fileName, text string) error {
 	err := os.WriteFile(fileName, []byte(text), 0666)
 	if err != nil {
 		return fmt.Errorf("Error writing file %s: %w", fileName, err)
@@ -13,7 +13,7 @@ func WriteMD(fileName, text string) error {
 	return nil
 }
 
-func LoadMD(fileName string) ([]byte, error) {
+func Read(fileName string) ([]byte, error) {
 	bytes, err := os.ReadFile(fileName)
 	if err != nil {
 		if os.IsNotExist(err) {

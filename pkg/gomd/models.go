@@ -25,5 +25,5 @@ type Builder struct {
 }
 
 type Compounder struct {
-	builder Builder
+	Builder Builder
 }
