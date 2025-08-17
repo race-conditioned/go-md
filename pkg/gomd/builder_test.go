@@ -146,11 +146,10 @@ func TestCompoundCases(t *testing.T) {
 		{
 			"compound", "compound.md", b.Build(
 				c.Compound(
-					c.Section(b.H1, "Title", "para 1", "para 2", "para 3"),
-					c.Section(b.H2, "Title 2", "bara 1", "bara 2", "bara 3"),
-					c.OL("item 1", "item 2", "item 3"),
-					c.Header(3, "My Orders"),
-					c.UL("order 1", "order 2", "order 3"),
+					c.Section1("Title", []string{"para 1", "para 2", "para 3"}),
+					c.Section2("Title 2", []string{"bara 1", "bara 2", "bara 3"}),
+					c.OL1("", []string{"item 1", "item 2", "item 3"}),
+					c.UL3("My Orders", []string{"order 1", "order 2", "order 3"}),
 					footer,
 				)...,
 			),

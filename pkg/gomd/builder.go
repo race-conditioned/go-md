@@ -173,8 +173,7 @@ func (b *Builder) crawlContent(el *Element, prefix string, parentInfo *ParentInf
 	outStr := ""
 	olParent := false
 
-	// 1) Derive root list kind for *this* node
-	rootKind := parentInfo.firstParent // carry over
+	rootKind := parentInfo.firstParent
 	if rootKind == "" && (el.name == "ul" || el.name == "ol") {
 		rootKind = el.name
 	}
@@ -265,7 +264,7 @@ func collapseRuns(s string, max int) string {
 	return b.String()
 }
 
-// Generate consumes Element pointers.
+// Build consumes Element pointers.
 // It uses a recursive crawl function to convert each Element content into an equivalent in markdown.
 func (b *Builder) Build(elements ...*Element) string {
 	parentInfo := &ParentInfo{iter: 0, isPrefix: true, olParent: false, firstParent: ""}
@@ -291,107 +290,4 @@ func (b *Builder) Build(elements ...*Element) string {
 	}
 
 	return s
-}
-
-// Raw Builder Example Usage
-/*
-func main() {
-	brandName := "X Company"
-	b := Builder{}
-	header := []*Element{
-		b.H1(fmt.Sprintf("My %s Document", brandName)),
-		b.NL(),
-		b.Textln("great!"),
-		b.NL(),
-		b.UL(
-			b.Textln("first"),
-			b.Textln("second"),
-			b.OL(
-				b.Bold("first"),
-				b.Textln(" element"),
-			),
-		),
-	}
-
-	body := []*Element{
-		b.Text("This is the body"),
-	}
-
-	template := []*Element{}
-	template = append(template, header...)
-	template = append(template, b.NL())
-	template = append(template, body...)
-
-	md := b.Generate(template...)
-	err := WriteMD("xcompany.md", md)
-	if err != nil {
-		fmt.Println("Error: ", err.Error())
-	}
-}
-// OUTPUT
-// # My X Company Document
-//
-// great!
-//
-// - first
-// - second
-// 	1. **first** element
-//
-// This is the body
-*/
-
-func (c *Compounder) Section(h func(string) *Element, title string, paras ...string) []*Element {
-	out := []*Element{
-		h(title),
-		c.Builder.NL(),
-	}
-
-	for _, p := range paras {
-		out = append(out, c.Builder.Textln(p), c.Builder.NL())
-	}
-
-	return out
-}
-
-func (c *Compounder) Header(level int, text string) []*Element {
-	if level < 1 {
-		level = 1
-	}
-	if level > 6 {
-		level = 6
-	}
-	headers := map[int]func(string) *Element{
-		1: c.Builder.H1,
-		2: c.Builder.H2,
-		3: c.Builder.H3,
-		4: c.Builder.H4,
-		5: c.Builder.H5,
-		6: c.Builder.H6,
-	}
-
-	return []*Element{headers[level](text), c.Builder.NL()}
-}
-
-func (c *Compounder) UL(texts ...string) []*Element {
-	children := []*Element{}
-	for _, text := range texts {
-		children = append(children, c.Builder.Textln(text))
-	}
-	return []*Element{c.Builder.UL(children...), c.Builder.NL()}
-}
-
-func (c *Compounder) OL(texts ...string) []*Element {
-	children := []*Element{}
-	for _, text := range texts {
-		children = append(children, c.Builder.Textln(text))
-	}
-	return []*Element{c.Builder.OL(children...), c.Builder.NL()}
-}
-
-func (c *Compounder) Compound(groups ...[]*Element) []*Element {
-	out := []*Element{}
-	for _, g := range groups {
-		out = append(out, g...)
-	}
-	return out
 }
