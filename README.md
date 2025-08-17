@@ -19,47 +19,46 @@ You can see the usage in the `example` directory.
 Here is An example of using the Builder for raw constructions:
 
 ```go
- 
 package main
 
 import (
-	"fmt"
+ "fmt"
 
-	"github.com/race-conditioned/go-md/pkg/gomd"
+ "github.com/race-conditioned/go-md/pkg/gomd"
 )
 
 func main() {
-	brandName := "X Company"
-	b := gomd.Builder{}
-	header := []*gomd.Element{
-		b.H1(fmt.Sprintf("My %s Document", brandName)),
-		b.NL(),
-		b.Textln("great!"),
-		b.NL(),
-		b.UL(
-			b.Textln("first"),
-			b.Textln("second"),
-			b.OL(
-				b.Bold("first"),
-				b.Textln(" element"),
-			),
-		),
-	}
+ brandName := "X Company"
+ b := gomd.Builder{}
+ header := []*gomd.Element{
+  b.H1(fmt.Sprintf("My %s Document", brandName)),
+  b.NL(),
+  b.Textln("great!"),
+  b.NL(),
+  b.UL(
+   b.Textln("first"),
+   b.Textln("second"),
+   b.OL(
+    b.Bold("first"),
+    b.Textln(" element"),
+   ),
+  ),
+ }
 
-	body := []*gomd.Element{
-		b.Text("This is the body"),
-	}
+ body := []*gomd.Element{
+  b.Text("This is the body"),
+ }
 
-	template := []*gomd.Element{}
-	template = append(template, header...)
-	template = append(template, b.NL())
-	template = append(template, body...)
+ template := []*gomd.Element{}
+ template = append(template, header...)
+ template = append(template, b.NL())
+ template = append(template, body...)
 
-	md := b.Generate(template...)
-	err := gomd.Write("xcompany.md", md)
-	if err != nil {
-		fmt.Println("Error: ", err.Error())
-	}
+ md := b.Generate(template...)
+ err := gomd.Write("xcompany.md", md)
+ if err != nil {
+  fmt.Println("Error: ", err.Error())
+ }
 }
 ```
 
@@ -72,8 +71,8 @@ As you can see templates can be composed and mixed and matched at your discretio
 - Read and Write markdown ✅
 - Basic Markdown syntax supported ✅
 - Builder and composer tested ✅
-- Common Mark compatible - planned but a long way off
+- Round trip support ✅
 - Deep nesting - partial support
-- Round trip support - planned
 - Serve to a viewer - planned
 - Conversion to HTML - planned
+- Common Mark compatible - planned but a long way off

@@ -6,8 +6,7 @@ import (
 	"github.com/race-conditioned/go-md/pkg/gomd"
 )
 
-var exampleUsage = `
-package main
+var exampleUsage = `package main
 
 import (
 	"fmt"
@@ -55,26 +54,41 @@ func main() {
 
 	md := b.Build(
 		c.Compound(
-			c.Header(1, "gomd"),
-			c.Section(
-				b.H2,
+			c.Header1("gomd"),
+			c.Section2(
 				"Motivation",
-				"Welcome to race-conditioned/gomd, a markdown library written in go. The motivation for this project is to be able to programatically create markdown files that will serve like github tickets but with less overhead for personal projects.",
-				"I realised that in order to do this I would be best served with a library that can build and parse markdown. However I quickly found that markdown is a very loose grammar markup language and has many edge cases. I want to be able to round trip some markdown so that I can save a file by my specification, then load it again, edit it, and save it again.",
-				"This project is a WIP, and in these early stages, breaking changes may be released, so please contact me if you are interested in using it or contributing.",
+				[]string{
+					"Welcome to race-conditioned/gomd, a markdown library written in go. The motivation for this project is to be able to programatically create markdown files that will serve like github tickets but with less overhead for personal projects.",
+					"I realised that in order to do this I would be best served with a library that can build and parse markdown. However I quickly found that markdown is a very loose grammar markup language and has many edge cases. I want to be able to round trip some markdown so that I can save a file by my specification, then load it again, edit it, and save it again.",
+					"This project is a WIP, and in these early stages, breaking changes may be released, so please contact me if you are interested in using it or contributing.",
+				},
 			),
-			c.Section(
-				b.H2,
+			c.Section2(
 				"Usage",
-				"There are two main ways to build markdown from this library. One way is to use the Compounder, which is good for simple creation of markdown. Another way is to use the Builder for more fine grained control.",
-				"This README was written using the `gomd.Compounder`",
-				"You can see the usage in the `example` directory.",
-				"Here is An example of using the Builder for raw constructions:",
-				fmt.Sprintf("```go\n %s\n```", exampleUsage),
-				"As you can see templates can be composed and mixed and matched at your discretion, or you can input builder functions directly into the `Build` function",
+				[]string{
+					"There are two main ways to build markdown from this library. One way is to use the Compounder, which is good for simple creation of markdown. Another way is to use the Builder for more fine grained control.",
+					"This README was written using the `gomd.Compounder`",
+					"You can see the usage in the `example` directory.",
+					"Here is An example of using the Builder for raw constructions:",
+					fmt.Sprintf("```go\n%s\n```", exampleUsage),
+					"As you can see templates can be composed and mixed and matched at your discretion, or you can input builder functions directly into the `Build` function",
+				},
 			),
-			c.Header(2, "Features"),
-			c.UL("markdown builder ✅", "markdown compounder ✅", "Read and Write markdown ✅", "Basic Markdown syntax supported ✅", "Builder and composer tested ✅", "Common Mark compatible - planned but a long way off", "Deep nesting - partial support", "Round trip support - planned", "Serve to a viewer - planned", "Conversion to HTML - planned"),
+			c.UL2(
+				"Features",
+				[]string{
+					"markdown builder ✅",
+					"markdown compounder ✅",
+					"Read and Write markdown ✅",
+					"Basic Markdown syntax supported ✅",
+					"Builder and composer tested ✅",
+					"Round trip support ✅",
+					"Deep nesting - partial support",
+					"Serve to a viewer - planned",
+					"Conversion to HTML - planned",
+					"Common Mark compatible - planned but a long way off",
+				},
+			),
 		)...,
 	)
 
