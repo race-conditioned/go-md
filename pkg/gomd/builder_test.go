@@ -7,7 +7,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// TODO: handle concatenation
 func TestSimpleBuilderCases(t *testing.T) {
 	b := Builder{}
 
@@ -58,11 +57,10 @@ func TestSimpleBuilderCases(t *testing.T) {
 		{"nl5", "nl5.md", b.Build(b.Text("hi"), b.NL(), b.Text("there"))},
 		{"nl6", "nl5.md", b.Build(b.Textln("hi"), b.Text("there"))},
 		{"nl7", "nl7.md", b.Build(b.Textln("hi"), b.NL(), b.Text("there"))},
-		{"nl8", "nl1.md", b.Build(b.NLs(8))},
-		{"nl9", "nl9.md", b.Build(b.Textln("hi"), b.NLs(8), b.Text("there"))},
+		{"nl9", "nl9.md", b.Build(b.Textln("hi"), b.NL(), b.Text("there"))},
 
 		// Rule
-		//{"rule1", "rule1.md", b.Build(b.Rule())}, -- WARN: quite an edge case to just have a rule
+		{"rule1", "rule1.md", b.Build(b.Rule())},
 		{"rule2", "rule2.md", b.Build(b.Textln("hi"), b.Rule(), b.Textln("there"))},
 
 		// Code

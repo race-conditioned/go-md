@@ -1,122 +1,117 @@
 package gomd
 
-func normalize(e []*Element) []*Element {
-	out := make([]*Element, 0, len(e))
-	for _, x := range e {
-		if x == nil {
-			continue
-		}
-		x.children = normalize(x.children)
-		out = append(out, x)
-	}
-	return out
-}
+import (
+	"testing"
 
-// func TestRoundTrip(t *testing.T) {
-// 	b := Builder{}
-//
-// 	cases := []struct {
-// 		name string
-// 		path string
-// 	}{
-// 		// HEADERS
-// 		{"h1", "h1.md"},
-// 		{"h2", "h2.md"},
-// 		{"h3", "h3.md"},
-// 		{"h4", "h4.md"},
-// 		{"h5", "h5.md"},
-// 		{"h6", "h6.md"},
-//
-// 		// TEXT
-// 		{"text1", "text1.md"},
-//
-// 		// BOLD
-// 		{"bold1", "bold1.md"},
-// 		{"bold1ln", "bold1.md"},
-// 		{"bold2", "bold2.md"},
-// 		{"bold2ln", "bold2.md"},
-//
-// 		// ITALIC
-// 		{"italic1", "italic1.md"},
-// 		{"italic1ln", "italic1.md"},
-// 		{"italic2", "italic2.md"},
-// 		{"italic2ln", "italic2.md"},
-//
-// 		// // LINK
-// 		// {"link1", "link1.md"},
-// 		// {"link1ln", "link1.md"},
-// 		// {"link2", "link2.md"},
-// 		// {"link2ln", "link2.md"},
-//
-// 		// // IMAGE
-// 		// {"img", "img1.md"},
-// 		// {"img2", "img2.md"},
-// 		//
-// 		// // NL
-// 		// {"nl1", "nl1.md"},
-// 		// {"nl2", "nl2.md"},
-// 		// {"nl3", "nl2.md"},
-// 		// {"nl4", "nl2.md"},
-// 		// {"nl5", "nl5.md"},
-// 		// {"nl6", "nl5.md"},
-// 		// {"nl7", "nl7.md"},
-// 		// {"nl8", "nl1.md"},
-// 		// {"nl9", "nl9.md"},
-// 		//
-// 		// // Rule
-// 		// //{"rule1", "rule1.md"}, -- WARN: quite an edge case to just have a rule
-// 		// {"rule2", "rule2.md"},
-// 		//
-// 		// // Code
-// 		// {"code1", "code1.md"},
-// 		// {"code1ln", "code1.md"},
-// 		// {"code2", "code2.md"},
-// 		// {"code2ln", "code2.md"},
-// 		//
-// 		// // UL
-// 		// {"ul1", "nl1.md"},
-// 		// {"ul2", "ul2.md"},
-// 		// {"ul3", "ul3.md"},
-// 		// {"ul4", "ul4.md"},
-// 		// {"ul5", "ul3.md"},
-// 		// {"ul6", "ul6.md"},
-// 		// {"ul7", "ul7.md"},
-// 		// {"ul8", "ul8.md"},
-// 		// {"ul9", "ul9.md"},
-// 		// {"ul10", "ul10.md"},
-// 		//
-// 		// // OL
-// 		// {"ol1", "nl1.md"},
-// 		// {"ol2", "ol2.md"},
-// 		// {"ol3", "ol3.md"},
-// 		// {"ol4", "ol4.md"},
-// 		// {"ol5", "ol3.md"},
-// 		// {"ol6", "ol6.md"},
-// 		// {"ol7", "ol7.md"},
-// 		// {"ol8", "ol8.md"},
-// 		// {"ol9", "ol9.md"},
-// 		// {"ol10", "ol10.md"},
-// 	}
-//
-// 	opts := []cmp.Option{
-// 		cmpopts.EquateEmpty(),
-// 		cmp.AllowUnexported(Element{}),
-// 	}
-//
-// 	for _, tc := range cases {
-// 		tc := tc
-// 		t.Run(tc.name, func(t *testing.T) {
-// 			orig, err := Read("testdata/" + tc.path)
-// 			if err != nil {
-// 				t.Fatal(err)
-// 			}
-// 			want := b.Build(ParseMD(string(orig), "")...)
-// 			if diff := cmp.Diff(want, string(orig), opts...); diff != "" {
-// 				t.Fatalf("Round trip mismatch (-want +got):\n%s", diff)
-// 			}
-// 		})
-// 	}
-// }
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+)
+
+func TestRoundTrip(t *testing.T) {
+	b := Builder{}
+
+	cases := []struct {
+		name string
+		path string
+	}{
+		// HEADERS
+		{"h1", "h1.md"},
+		{"h2", "h2.md"},
+		{"h3", "h3.md"},
+		{"h4", "h4.md"},
+		{"h5", "h5.md"},
+		{"h6", "h6.md"},
+
+		// TEXT
+		{"text1", "text1.md"},
+
+		// BOLD
+		{"bold1", "bold1.md"},
+		{"bold1ln", "bold1.md"},
+		{"bold2", "bold2.md"},
+		{"bold2ln", "bold2.md"},
+
+		// ITALIC
+		{"italic1", "italic1.md"},
+		{"italic1ln", "italic1.md"},
+		{"italic2", "italic2.md"},
+		{"italic2ln", "italic2.md"},
+
+		// LINK
+		{"link1", "link1.md"},
+		{"link1ln", "link1.md"},
+		{"link2", "link2.md"},
+		{"link2ln", "link2.md"},
+
+		// IMAGE
+		{"img", "img1.md"},
+		{"img2", "img2.md"},
+
+		// NL
+		{"nl1", "nl1.md"},
+		{"nl2", "nl2.md"},
+		{"nl3", "nl2.md"},
+		{"nl4", "nl2.md"},
+		{"nl5", "nl5.md"},
+		{"nl6", "nl5.md"},
+		{"nl7", "nl7.md"},
+		{"nl8", "nl1.md"},
+		{"nl9", "nl9.md"},
+
+		// Rule
+		{"rule1", "rule1.md"},
+		{"rule2", "rule2.md"},
+
+		// Code
+		{"code1", "code1.md"},
+		{"code1ln", "code1.md"},
+		{"code2", "code2.md"},
+		{"code2ln", "code2.md"},
+
+		// UL
+		{"ul1", "nl1.md"},
+		{"ul2", "ul2.md"},
+		{"ul3", "ul3.md"},
+		{"ul4", "ul4.md"},
+		{"ul5", "ul3.md"},
+		{"ul6", "ul6.md"},
+		{"ul7", "ul7.md"},
+		{"ul8", "ul8.md"},
+		{"ul9", "ul9.md"},
+		{"ul10", "ul10.md"},
+
+		// OL
+		{"ol1", "nl1.md"},
+		{"ol2", "ol2.md"},
+		{"ol3", "ol3.md"},
+		{"ol4", "ol4.md"},
+		{"ol5", "ol3.md"},
+		{"ol6", "ol6.md"},
+		{"ol7", "ol7.md"},
+		{"ol8", "ol8.md"},
+		{"ol9", "ol9.md"},
+		{"ol10", "ol10.md"},
+	}
+
+	opts := []cmp.Option{
+		cmpopts.EquateEmpty(),
+		cmp.AllowUnexported(Element{}),
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			orig, err := Read("testdata/" + tc.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := b.Build(ParseMD(string(orig), "")...)
+			if diff := cmp.Diff(want, string(orig), opts...); diff != "" {
+				t.Fatalf("Round trip mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 // // Property: Build -> Parse equals original AST (after nil/empty normalization).
 // func FuzzRoundTripElements(f *testing.F) {

@@ -7,13 +7,25 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+func normalize(e []*Element) []*Element {
+	out := make([]*Element, 0, len(e))
+	for _, x := range e {
+		if x == nil {
+			continue
+		}
+		x.children = normalize(x.children)
+		out = append(out, x)
+	}
+	return out
+}
+
 // TODO: handle concatenation
 func TestSimpleParseCases(t *testing.T) {
 	b := Builder{}
 	cases := []struct {
 		name string
 		path string
-		got  []*Element
+		want []*Element
 	}{
 		// HEADERS
 		{"h1", "h1.md", []*Element{b.H1("Header test")}},
@@ -31,10 +43,44 @@ func TestSimpleParseCases(t *testing.T) {
 		{"bold2", "bold2.md", []*Element{b.Bold("hi"), b.Text(","), b.Boldln("there")}},
 
 		// ITALIC
-		// {"italic1", "italic1.md", []*Element{b.Italic("hi")}},
-		// {"italic1ln", "italic1.md", []*Element{b.Italicln("hi")}},
-		// {"italic2", "italic2.md", []*Element{b.Italic("hi"), b.Text(","), b.Italicln("there")}},
-		// {"italic2ln", "italic2.md", []*Element{b.Italic("hi"), b.Text(","), b.Italicln("there")}},
+		{"italic1ln", "italic1.md", []*Element{b.Italicln("hi")}},
+		{"italic2", "italic2.md", []*Element{b.Italic("hi"), b.Text(","), b.Italicln("there")}},
+
+		// LINK
+		{"link1ln", "link1.md", []*Element{b.Linkln("google", "https://google.com")}},
+		{"link2", "link2.md", []*Element{b.Link("google", "https://google.com"), b.Linkln("amazon", "https://amazon.com")}},
+
+		// IMAGE
+		{"img", "img1.md", []*Element{b.Img("alt", "https://google.com/img")}},
+		{"img2", "img2.md", []*Element{b.Img("my-alt", "https://google.com/img"), b.Img("my-alt2", "https://amazon.com/img2")}},
+
+		// NL
+		{"nl1", "nl1.md", []*Element{b.NL()}},
+		{"nl2", "nl2.md", []*Element{b.Textln("hi")}},
+		{"nl5", "nl5.md", []*Element{b.Textln("hi"), b.Textln("there")}},
+		{"nl7", "nl7.md", []*Element{b.Textln("hi"), b.NL(), b.Textln("there")}},
+
+		// RULE
+		{"rule1", "rule1.md", []*Element{b.Rule()}},
+		{"rule2", "rule2.md", []*Element{b.Textln("hi"), b.Rule(), b.Textln("there")}},
+
+		// Code
+		{"code1ln", "code1.md", []*Element{b.Codeln("hi")}},
+		{"code2", "code2.md", []*Element{b.Code("hi"), b.Text(","), b.Codeln("there")}},
+
+		// UL
+		{"ul2", "ul2.md", []*Element{b.UL(b.Textln("hi"))}},
+		{"ul6", "ul6.md", []*Element{b.UL(b.Text("hi "), b.Boldln("there"))}},
+		{"ul7", "ul7.md", []*Element{b.UL(b.Textln("one"), b.Textln("two"), b.Textln("three"))}},
+		{"ul9", "ul9.md", []*Element{b.UL(b.Textln("one"), b.Text("my link: "), b.Linkln("google", "google.com"), b.Textln("three"))}},
+		{"ul10", "ul10.md", []*Element{b.UL(b.Textln("one"), b.Text("my link: "), b.Link("google", "google.com"), b.Boldln("So Cool"), b.Textln("three"))}},
+
+		// // OL
+		{"ol2", "ol2.md", []*Element{b.OL(b.Textln("hi"))}},
+		{"ol6", "ol6.md", []*Element{b.OL(b.Text("hi "), b.Boldln("there"))}},
+		{"ol7", "ol7.md", []*Element{b.OL(b.Textln("one"), b.Textln("two"), b.Textln("three"))}},
+		{"ol9", "ol9.md", []*Element{b.OL(b.Textln("one"), b.Text("my link: "), b.Linkln("google", "google.com"), b.Textln("three"))}},
+		{"ol10", "ol10.md", []*Element{b.OL(b.Textln("one"), b.Text("my link: "), b.Link("google", "google.com"), b.Boldln("So Cool"), b.Textln("three"))}},
 	}
 
 	opts := []cmp.Option{
@@ -49,8 +95,8 @@ func TestSimpleParseCases(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := ParseMD(string(md), "")
-			if diff := cmp.Diff(want, tc.got, opts...); diff != "" {
+			got := ParseMD(string(md), "")
+			if diff := cmp.Diff(normalize(tc.want), got, opts...); diff != "" {
 				t.Fatalf("Build mismatch (-want +got):\n%s", diff)
 			}
 		})

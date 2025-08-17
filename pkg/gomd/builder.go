@@ -88,14 +88,6 @@ func (b *Builder) NL() *Element {
 	return &Element{name: "nl", content: "\n"}
 }
 
-// NLs is used to render multiple newlines.
-// Specify the count of newlines you require.
-// It behaves exactly as an escaped newline point in a string, eg. "\n".
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) NLs(count int) *Element {
-	return &Element{name: "nl", content: strings.Repeat("\n", count)}
-}
-
 // UL is used to begin rendering an unordered list.
 // It receives Element pointers as children.
 // This allows for custom nesting.
@@ -112,7 +104,10 @@ func (b *Builder) UL(children ...*Element) *Element {
 // This allows for custom nesting.
 // Any Element (including an OL Element) can be nested in a OL.
 func (b *Builder) OL(children ...*Element) *Element {
-	return &Element{name: "ol", children: children}
+	if len(children) > 0 {
+		return &Element{name: "ol", children: children}
+	}
+	return nil
 }
 
 // Link is used to render a hyperlink.
@@ -150,7 +145,7 @@ func (b *Builder) Code(text string) *Element {
 // Codeln is used to render an unfenced code block.
 // It returns a pointer to an Element which can be used in the Generate function.
 func (b *Builder) Codeln(text string) *Element {
-	return &Element{name: "code", content: fmt.Sprintf("`%s`\n", text)}
+	return &Element{name: "codeln", content: fmt.Sprintf("`%s`\n", text)}
 }
 
 type ParentInfo struct {
