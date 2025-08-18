@@ -1,7 +1,6 @@
 package gomd
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -22,9 +21,9 @@ func ParseMD(md string, format MarkDownFormat) []*Element {
 				}
 			}
 
-			*elements = append(*elements, &Element{name: "nl", content: "\n"})
+			*elements = append(*elements, &Element{Kind: KNewLine, LineBreak: true})
 		}
-		// we allow for switching between the elements and children slices
+		// we allow for switching between the elements and Children slices
 		isListItem, generation, name, trimmed := identifyListedItem(line)
 		if isListItem {
 			line = trimmed
@@ -45,19 +44,19 @@ func ParseMD(md string, format MarkDownFormat) []*Element {
 	return *elements
 }
 
-func identifyListedItem(line string) (bool, int, string, string) {
+func identifyListedItem(line string) (bool, int, ListType, string) {
 	trimmed := strings.TrimLeft(line, " \t")
-	name := ""
+	listType := ListNone
 	if len(trimmed) >= 2 && trimmed[0] == '-' && trimmed[1] == ' ' {
-		name = "ul"
+		listType = ListUnordered
 	}
 	if len(trimmed) >= 3 &&
 		strings.Contains("123456789", string(trimmed[0])) &&
 		trimmed[1] == '.' &&
 		trimmed[2] == ' ' {
-		name = "ol"
+		listType = ListOrdered
 	}
-	if len(name) > 0 {
+	if listType != ListNone {
 		spaceCount := 0
 		for _, r := range line {
 			if string(r) == "\t" {
@@ -69,29 +68,29 @@ func identifyListedItem(line string) (bool, int, string, string) {
 			}
 		}
 
-		if name == "ul" {
+		if listType == ListUnordered {
 			trimmed = trimmed[2:]
 		} else {
 			trimmed = trimmed[3:]
 		}
 
-		return true, (spaceCount / 2) + 1, name, trimmed
+		return true, (spaceCount / 2) + 1, listType, trimmed
 	}
 
-	return false, 0, "", ""
+	return false, 0, ListNone, ""
 }
 
-func handleListItem(name string, nestCount, generation *int, parentStack, elements *[]*Element, target **[]*Element) {
+func handleListItem(listType ListType, nestCount, generation *int, parentStack, elements *[]*Element, target **[]*Element) {
 	if *nestCount < *generation {
 		var targetParent *Element
 		var rootParent *Element
 		// create as many parents as required and link them in lineage order, and keep a pointer to the root parent
 		for i := 0; i < *generation-*nestCount; i++ {
-			parent := &Element{name: name, children: []*Element{}}
+			parent := &Element{Kind: KList, ListKind: listType, Children: []*Element{}}
 			if i == 0 {
 				rootParent = parent
 			} else {
-				targetParent.children = append(targetParent.children, parent)
+				targetParent.Children = append(targetParent.Children, parent)
 			}
 			targetParent = parent
 
@@ -101,7 +100,7 @@ func handleListItem(name string, nestCount, generation *int, parentStack, elemen
 		**target = append(**target, rootParent)
 
 		// now we need to move the pointer to the most junior child
-		*target = &(*parentStack)[len(*parentStack)-1].children
+		*target = &(*parentStack)[len(*parentStack)-1].Children
 		*nestCount = *generation
 	} else if *nestCount > *generation {
 		if len(*parentStack) > 0 {
@@ -112,7 +111,7 @@ func handleListItem(name string, nestCount, generation *int, parentStack, elemen
 		*nestCount = *generation
 
 		if len(*parentStack) > 0 {
-			*target = &(*parentStack)[len(*parentStack)-1].children
+			*target = &(*parentStack)[len(*parentStack)-1].Children
 		} else {
 			*target = elements
 		}
@@ -142,7 +141,7 @@ func processHeader(elements *[]*Element, line string) bool {
 		}
 
 		if isHeader {
-			*elements = append(*elements, &Element{name: fmt.Sprintf("h%d", hashCount), content: strings.TrimLeft(line, "# ") + "\n"})
+			*elements = append(*elements, &Element{Kind: KHeading, Level: hashCount, LineBreak: true, Text: strings.TrimLeft(line, "# ")})
 			return isHeader
 		}
 	}
@@ -159,7 +158,7 @@ func processHorizontalRule(elements *[]*Element, line string, index *int) bool {
 		})
 
 		if !invalidChar {
-			*elements = append(*elements, &Element{name: "rule", content: "\n" + line + "\n\n"})
+			*elements = append(*elements, &Element{Kind: KRule, LineBreak: true, Text: "\n" + line + "\n"})
 			*index = *index + 1
 			return true
 		}
@@ -206,7 +205,7 @@ func processVariableLine(elements *[]*Element, line string) bool {
 		cache = append(cache, line[basePointer])
 	}
 	if len(cache) != 0 || len(line) == 1 {
-		*elements = append(*elements, &Element{name: "textln", content: string(cache) + string(line[len(line)-1]) + "\n"})
+		*elements = append(*elements, &Element{Kind: KText, LineBreak: true, Text: string(cache) + string(line[len(line)-1])})
 	}
 
 	return false
@@ -229,14 +228,14 @@ func handleItalic(elements *[]*Element, line string, specialChars *[]*IndexChar,
 		italicText := line[*basePointer+1 : *lookAheadPointer]
 		// clear the cache to a text element
 		if len(*cache) != 0 {
-			*elements = append(*elements, &Element{name: "text", content: string(*cache)})
+			*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
 			*cache = []byte{}
 		}
 		// if there are no more chars we use the ln version
 		if *lookAheadPointer == len(line)-1 {
-			*elements = append(*elements, &Element{name: "italicln", content: "_" + italicText + "_" + "\n"})
+			*elements = append(*elements, &Element{Kind: KItalic, LineBreak: true, Text: "_" + italicText + "_"})
 		} else {
-			*elements = append(*elements, &Element{name: "italic", content: "_" + italicText + "_"})
+			*elements = append(*elements, &Element{Kind: KItalic, Text: "_" + italicText + "_"})
 		}
 
 		// let's remove special chars that are no more of use to us
@@ -283,14 +282,14 @@ func handleBold(elements *[]*Element, line string, specialChars *[]*IndexChar, c
 			boldText := line[*basePointer+2 : *lookAheadPointer]
 			// clear the cache to a text element
 			if len(*cache) != 0 {
-				*elements = append(*elements, &Element{name: "text", content: string(*cache)})
+				*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
 				*cache = []byte{}
 			}
 			// if there are no more chars then we use the ln version
 			if *lookAheadPointer+1 == len(line)-1 {
-				*elements = append(*elements, &Element{name: "boldln", content: "**" + boldText + "**" + "\n"})
+				*elements = append(*elements, &Element{Kind: KBold, LineBreak: true, Text: "**" + boldText + "**"})
 			} else {
-				*elements = append(*elements, &Element{name: "bold", content: "**" + boldText + "**"})
+				*elements = append(*elements, &Element{Kind: KBold, Text: "**" + boldText + "**"})
 			}
 
 			// remove the further double * from specialChars
@@ -359,14 +358,14 @@ func handleLink(elements *[]*Element, line string, specialChars *[]*IndexChar, c
 			link = line[tempLookAheadPointer+2 : *lookAheadPointer]
 			// is there cache to append?
 			if len(*cache) != 0 {
-				*elements = append(*elements, &Element{name: "text", content: string(*cache)})
+				*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
 				*cache = []byte{}
 			}
 			// if there are no more chars we use the ln version
 			if *lookAheadPointer == len(line)-1 {
-				*elements = append(*elements, &Element{name: "linkln", content: fmt.Sprintf("[%s](%s)\n", display, link)})
+				*elements = append(*elements, &Element{Kind: KLink, LineBreak: true, Text: display, Href: link})
 			} else {
-				*elements = append(*elements, &Element{name: "link", content: fmt.Sprintf("[%s](%s) ", display, link)})
+				*elements = append(*elements, &Element{Kind: KLink, Text: display, Href: link})
 			}
 			// let's clear out the special chars that are of no use to us
 			newSpecialChars := []*IndexChar{}
@@ -434,11 +433,11 @@ func handleImage(elements *[]*Element, line string, specialChars *[]*IndexChar, 
 				link = line[tempLookAheadPointer+2 : *lookAheadPointer]
 				// flush the cache to a text element
 				if len(*cache) != 0 {
-					*elements = append(*elements, &Element{name: "text", content: string(*cache)})
+					*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
 					*cache = []byte{}
 				}
 				// images are always "ln"
-				*elements = append(*elements, &Element{name: "image", content: fmt.Sprintf("![%s](%s)\n", display, link)})
+				*elements = append(*elements, &Element{Kind: KImage, LineBreak: true, Alt: display, Href: link})
 
 				// now get rid of the special chars that are of no use to us
 				newSpecialChars := []*IndexChar{}
@@ -490,14 +489,14 @@ func handleCode(elements *[]*Element, line string, specialChars *[]*IndexChar, c
 		codeText := line[*basePointer+1 : *lookAheadPointer]
 		// flush the cache to a text element
 		if len(*cache) != 0 {
-			*elements = append(*elements, &Element{name: "text", content: string(*cache)})
+			*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
 			*cache = []byte{}
 		}
 		// if there are no more chars we create an ln element
 		if *lookAheadPointer == len(line)-1 {
-			*elements = append(*elements, &Element{name: "codeln", content: "`" + codeText + "`" + "\n"})
+			*elements = append(*elements, &Element{Kind: KCodeSpan, LineBreak: true, Text: "`" + codeText + "`"})
 		} else {
-			*elements = append(*elements, &Element{name: "code", content: "`" + codeText + "`"})
+			*elements = append(*elements, &Element{Kind: KCodeSpan, Text: "`" + codeText + "`"})
 		}
 
 		// let's get rid of the specialChars that are of no use to us

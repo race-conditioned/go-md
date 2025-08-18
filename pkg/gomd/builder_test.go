@@ -81,7 +81,7 @@ func TestSimpleBuilderCases(t *testing.T) {
 		{"ul9", "ul9.md", b.Build(b.UL(b.Textln("one"), b.Text("my link: "), b.Linkln("google", "google.com"), b.Textln("three")))},
 		{"ul10", "ul10.md", b.Build(b.UL(b.Textln("one"), b.Text("my link: "), b.Link("google", "google.com"), b.Boldln("So Cool"), b.Textln("three")))},
 
-		// OL
+		// // OL
 		{"ol1", "nl1.md", b.Build(b.OL())},
 		{"ol2", "ol2.md", b.Build(b.OL(b.Text("hi")))},
 		{"ol3", "ol3.md", b.Build(b.OL(b.Text("hi"), b.Text(" there")))},
@@ -228,35 +228,35 @@ func TestDeepNesting(t *testing.T) {
 			),
 		},
 		// WARN: deep nesting is just not in scope, it's nice to have some cases
-		// 	{
-		// 		"deepnes3", "nest3.md", b.Build(
-		// 			b.OL(
-		// 				b.Textln("one"),
-		// 				b.Text("and "),
-		// 				b.Boldln("two"),
-		// 				b.Textln("and"),
-		// 				b.OL(
-		// 					b.Textln("first"),
-		// 					b.Bold("and"),
-		// 					b.Textln(" second"),
-		// 					b.OL(
-		// 						b.Textln("one more"),
-		// 						b.Text("and "),
-		// 						b.Boldln("two more"),
-		// 						b.Textln("and"),
-		// 						b.OL(
-		// 							b.Textln("first again"),
-		// 							b.Bold("and"),
-		// 							b.Textln(" second again"),
-		// 						),
-		// 					),
-		// 				),
-		// 			),
-		// 		),
-		// 	},
+		{
+			"deepnes3", "nest3.md", b.Build(
+				b.OL(
+					b.Textln("one"),
+					b.Text("and "),
+					b.Boldln("two"),
+					b.Textln("and"),
+					b.OL(
+						b.Textln("first"),
+						b.Bold("and"),
+						b.Textln(" second"),
+						b.OL(
+							b.Textln("one more"),
+							b.Text("and "),
+							b.Boldln("two more"),
+							b.Textln("and"),
+							b.OL(
+								b.Textln("first again"),
+								b.Bold("and"),
+								b.Textln(" second again"),
+							),
+						),
+					),
+				),
+			),
+		},
 	}
 
-	_ = Write("check.md", cases[1].got)
+	_ = Write("check.md", cases[2].got)
 
 	for _, tc := range cases {
 		tc := tc

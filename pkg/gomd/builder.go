@@ -1,288 +1,179 @@
 package gomd
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 )
 
-// H1 is used to render a h1 markdown header.
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) H1(text string) *Element {
-	return &Element{name: "h1", content: text + "\n"}
+// heading is the single source of truth for H1..H6.
+func (b *Builder) heading(level int, text string) *Element {
+	if level < 1 {
+		level = 1
+	} else if level > 6 {
+		level = 6
+	}
+	return &Element{Kind: KHeading, Level: level, LineBreak: true, Text: text}
 }
 
-// H2 is used to render a h2 markdown header.
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) H2(text string) *Element {
-	return &Element{name: "h2", content: text + "\n"}
-}
+// H1 returns an Element pointer representing a level-1 heading.
+func (b *Builder) H1(text string) *Element { return b.heading(1, text) }
 
-// H3 is used to render a h3 markdown header.
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) H3(text string) *Element {
-	return &Element{name: "h3", content: text + "\n"}
-}
+// H2 returns an Element pointer representing a level-2 heading.
+func (b *Builder) H2(text string) *Element { return b.heading(2, text) }
 
-// H4 is used to render a h4 markdown header.
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) H4(text string) *Element {
-	return &Element{name: "h4", content: text + "\n"}
-}
+// H3 returns an Element pointer representing a level-3 heading.
+func (b *Builder) H3(text string) *Element { return b.heading(3, text) }
 
-// H5 is used to render a h5 markdown header.
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) H5(text string) *Element {
-	return &Element{name: "h5", content: text + "\n"}
-}
+// H4 returns an Element pointer representing a level-4 heading.
+func (b *Builder) H4(text string) *Element { return b.heading(4, text) }
 
-// H6 is used to render a h6 markdown header.
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) H6(text string) *Element {
-	return &Element{name: "h6", content: text + "\n"}
-}
+// H5 returns an Element pointer representing a level-5 heading.
+func (b *Builder) H5(text string) *Element { return b.heading(5, text) }
 
-// Text is used to render text.
-// If you want to end the text with a newline, use the Textln method on gomd.Builder.
-// Text returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) Text(text string) *Element {
-	return &Element{name: "text", content: text}
-}
+// H6 returns an Element pointer representing a level-5 heading.
+func (b *Builder) H6(text string) *Element { return b.heading(6, text) }
 
-// Textln is used to render text that is concluded with a newline.
-// It returns a pointer to an Element which can be used in the Generate function.
+// Text returns an Element pointer representing markdown text.
+func (b *Builder) Text(text string) *Element { return &Element{Kind: KText, Text: text} }
+
+// Textln returns an Element pointer representing a markdown text followed by a newline character.
 func (b *Builder) Textln(text string) *Element {
-	return &Element{name: "textln", content: text + "\n"}
+	return &Element{Kind: KText, LineBreak: true, Text: text}
 }
 
-// Bold is used to render bold text.
-// If you want to end the bold text with a newline, use the Boldln method on gomd.Builder.
-// It returns a pointer to an Element which can be used in the Generate function.
+// inlineWrap concatenates the wrap to each side of s and adds a newlilne character if newLine is true.
+func inlineWrap(wrap, s string) string {
+	return wrap + s + wrap
+}
+
+// Bold returns an Element pointer representing bold markdown text.
 func (b *Builder) Bold(text string) *Element {
-	return &Element{name: "bold", content: fmt.Sprintf("**%s**", text)}
+	return &Element{Kind: KBold, Text: inlineWrap("**", escapeInline(text))}
 }
 
-// Boldln is used to render bold text.
-// It returns a pointer to an Element which can be used in the Generate function.
+// Boldln returns an Element pointer representing bold markdown text followed by a newline character.
 func (b *Builder) Boldln(text string) *Element {
-	return &Element{name: "boldln", content: fmt.Sprintf("**%s**\n", text)}
+	return &Element{Kind: KBold, LineBreak: true, Text: inlineWrap("**", escapeInline(text))}
 }
 
-// Italic is used to render italic text.
-// If you want to end the italic text with a newline, use the Italicln method on gomd.Builder.
-// It returns a pointer to an Element which can be used in the Generate function.
+// Italic returns an Element pointer representing italic markdown text.
 func (b *Builder) Italic(text string) *Element {
-	return &Element{name: "italic", content: fmt.Sprintf("_%s_", text)}
+	return &Element{Kind: KItalic, Text: inlineWrap("_", escapeInline(text))}
 }
 
-// Italicln is used to render italic text.
-// It returns a pointer to an Element which can be used in the Generate function.
+// Italicln returns an Element pointer representing italic markdown text followed by a newline character.
 func (b *Builder) Italicln(text string) *Element {
-	return &Element{name: "italicln", content: fmt.Sprintf("_%s_\n", text)}
+	return &Element{Kind: KItalic, LineBreak: true, Text: inlineWrap("_", escapeInline(text))}
 }
 
-// NL is used to render a newline.
-// It behaves exactly as an escaped newline point in a string, eg. "\n".
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) NL() *Element {
-	return &Element{name: "nl", content: "\n"}
+// Code returns an Element pointer representing markdown inline code (a code span). For Fenced blocks, use CodeBlock.
+func (b *Builder) Code(text string) *Element {
+	return &Element{Kind: KCodeSpan, Text: inlineWrap("`", escapeBackticks(text))}
 }
 
-// UL is used to begin rendering an unordered list.
-// It receives Element pointers as children.
+// Codeln returns an Element pointer representing markdown inline code (a code span) followed by a newline character. For Fenced blocks, use CodeBlock..
+func (b *Builder) Codeln(text string) *Element {
+	return &Element{Kind: KCodeSpan, LineBreak: true, Text: inlineWrap("`", escapeBackticks(text))}
+}
+
+// CodeBlock returns an Element pointer representing a markdown fenced code block.
+func (b *Builder) CodeBlock(lang, code string) *Element {
+	return &Element{
+		Kind: KCodeBlock,
+		Lang: lang,
+		Text: code,
+	}
+}
+
+// NL returns an Element pointer representing a markdown nl character. The Builder.Build method ignores all newlines beyond two sequentially.
+func (b *Builder) NL() *Element { return &Element{Kind: KNewLine, LineBreak: true} }
+
+// UL returns an Element pointer representing the bounds of an unordered list.
+// Element pointers can be passed as Children.
 // This allows for custom nesting.
 // Any Element (including a UL Element) can be nested in a UL.
-func (b *Builder) UL(children ...*Element) *Element {
-	if len(children) > 0 {
-		return &Element{name: "ul", children: children}
-	}
-	return nil
+func (b *Builder) UL(Children ...*Element) *Element {
+	return &Element{Kind: KList, ListKind: ListUnordered, Children: Children}
 }
 
-// OL is used to begin rendering an ordered list.
-// It receives Element pointers as children.
+// OL returns an Element pointer representing the bounds of an ordered list.
+// Element pointers can be passed as Children.
 // This allows for custom nesting.
-// Any Element (including an OL Element) can be nested in a OL.
-func (b *Builder) OL(children ...*Element) *Element {
-	if len(children) > 0 {
-		return &Element{name: "ol", children: children}
-	}
-	return nil
+// Any Element (including an OL Element) can be nested in an OL.
+func (b *Builder) OL(Children ...*Element) *Element {
+	return &Element{Kind: KList, ListKind: ListOrdered, Children: Children}
 }
 
-// Link is used to render a hyperlink.
-// If you want to end the link with a newline, use the Linkln method on gomd.Builder.
-// It returns a pointer to an Element which can be used in the Generate function.
+// Link returns an Element pointer repersenting a markdown link.
 func (b *Builder) Link(display, link string) *Element {
-	return &Element{name: "link", content: fmt.Sprintf("[%s](%s) ", display, link)}
+	// INFO: trailing space is used to allow for spacing multiple links
+	return &Element{Kind: KLink, Text: escapeLinkText(display), Href: escapeURL(link)}
 }
 
-// Linkln is used to render a hyperlink.
-// It returns a pointer to an Element which can be used in the Generate function.
+// Link returns an Element pointer repersenting a markdown link followed by a newline character.
 func (b *Builder) Linkln(display, link string) *Element {
-	return &Element{name: "linkln", content: fmt.Sprintf("[%s](%s)\n", display, link)}
+	return &Element{Kind: KLink, LineBreak: true, Text: escapeLinkText(display), Href: escapeURL(link)}
 }
 
-// Img is used to render an image.
-// It returns a pointer to an Element which can be used in the Generate function.
+// Img returns an Element pointer repersenting a markdown image followed by a newline character.
 func (b *Builder) Img(alt, link string) *Element {
-	return &Element{name: "image", content: fmt.Sprintf("![%s](%s)\n", alt, link)}
+	return &Element{Kind: KImage, LineBreak: true, Alt: alt, Href: link}
 }
 
-// Rule is used to render a horizonatl rule.
-// It returns a pointer to an Element which can be used in the Generate function.
+// Rule returns an Element pointer representing a markdown rule, it will always pad a full newline between other Text.
 func (b *Builder) Rule() *Element {
-	return &Element{name: "rule", content: "\n---\n\n"}
+	return &Element{Kind: KRule, LineBreak: true, Text: "\n---\n"}
 }
 
-// Code is used to render an unfenced code block.
-// If you want to end the code text with a newline, use the Codeln method on gomd.Builder.
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) Code(text string) *Element {
-	return &Element{name: "code", content: fmt.Sprintf("`%s`", text)}
+// CodeFence renders a fenced, optionally language-tagged block.
+func (b *Builder) CodeFence(lang, code string) *Element { return b.CodeBlock(lang, code) }
+
+// Quote renders a Markdown blockquote with Children.
+func (b *Builder) Quote(Children ...*Element) *Element {
+	return &Element{Kind: KQuote, Children: Children}
 }
 
-// Codeln is used to render an unfenced code block.
-// It returns a pointer to an Element which can be used in the Generate function.
-func (b *Builder) Codeln(text string) *Element {
-	return &Element{name: "codeln", content: fmt.Sprintf("`%s`\n", text)}
-}
-
-type ParentInfo struct {
-	iter                 int
-	isPrefix             bool
-	olParent             bool
-	firstParent          string
-	firstParentOLhandled bool
-}
-
-// crawlContent is used to parse an Element and recurse through the associated children Elements.
-// It converts Element pointers into compatible markdown text and handles nesting.
-func (b *Builder) crawlContent(el *Element, prefix string, parentInfo *ParentInfo, level int) {
-	if el == nil {
+func (b *Builder) cleanLastElement(elements []*Element) {
+	if len(elements) == 0 {
 		return
 	}
 
-	nextPrefix := false
-	newIteration := 0
-	outStr := ""
-	olParent := false
-
-	rootKind := parentInfo.firstParent
-	if rootKind == "" && (el.name == "ul" || el.name == "ol") {
-		rootKind = el.name
-	}
-
-	switch el.name {
-	case "h1", "h2", "h3", "h4", "h5", "h6":
-		level, _ := strconv.Atoi(strings.TrimPrefix(el.name, "h"))
-		outStr = strings.Repeat("#", level) + " " + el.content
-		nextPrefix = true
-
-	case "ul":
-		if !parentInfo.olParent {
-			if strings.Contains(prefix, "-") {
-				prefix = "  " + prefix
-			} else {
-				prefix += "- "
-			}
-		}
-
-	case "ol":
-		newIteration++
-		if strings.Contains(prefix, "-") {
-			prefix = "  " + prefix
-		} else {
-			prefix += "- "
-		}
-		olParent = true
-
-	case "textln", "boldln", "italicln", "linkln", "codeln":
-		nextPrefix = true
-		fallthrough
-	default:
-		outStr = el.content
-	}
-
-	outPrefix := prefix
-	if parentInfo.iter != 0 && parentInfo.isPrefix && len(prefix) >= 2 {
-		spaces := strings.Repeat(" ", len(prefix)-2)
-		outPrefix = fmt.Sprintf("%s%d. ", spaces, parentInfo.iter)
-		parentInfo.iter++
-	}
-
-	if rootKind == "ol" && !parentInfo.firstParentOLhandled && level == 3 {
-		b.output.WriteString("\n")
-		parentInfo.firstParentOLhandled = true
-	}
-
-	if outStr != "" {
-		if parentInfo.isPrefix {
-			outStr = outPrefix + outStr
-		}
-		b.output.WriteString(outStr)
-	}
-	parentInfo.isPrefix = nextPrefix
-
-	childInfo := &ParentInfo{
-		iter:                 newIteration,
-		isPrefix:             true,
-		olParent:             olParent,
-		firstParent:          rootKind,
-		firstParentOLhandled: parentInfo.firstParentOLhandled,
-	}
-
-	for _, child := range el.children {
-		b.crawlContent(child, prefix, childInfo, level+1)
+	lastEl := elements[len(elements)-1]
+	if !lastEl.LineBreak && lastEl.Kind != KList {
+		lastEl.LineBreak = true
 	}
 }
 
-// collapseRuns returns s with any run of '\n' longer than max reduced to max.
-func collapseRuns(s string, max int) string {
-	if max < 1 {
-		return s
-	}
-	var b strings.Builder
-	b.Grow(len(s))
-	run := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			if run < max {
-				b.WriteByte('\n')
-			}
-			run++
-		} else {
-			run = 0
-			b.WriteByte(s[i])
-		}
-	}
-	return b.String()
+func (b *Builder) renderText(ctx *renderCtx, el *Element) {
+	ctx.renderText(b, el)
 }
 
 // Build consumes Element pointers.
-// It uses a recursive crawl function to convert each Element content into an equivalent in markdown.
+// It uses a recursive render function to convert each Element Text into an equivalent in markdown.
 func (b *Builder) Build(elements ...*Element) string {
-	parentInfo := &ParentInfo{iter: 0, isPrefix: true, olParent: false, firstParent: ""}
+	var buf strings.Builder
+	ctx := &renderCtx{
+		frames:      []listFrame{},
+		lineBuffer:  &strings.Builder{},
+		startOfLine: false,
+	}
+
+	// set render output to a local buffer for go routine safety
+	old := b.output
+	b.output = &buf
+
+	b.cleanLastElement(elements)
+
 	for _, el := range elements {
 		if el == nil {
 			continue
 		}
-		b.crawlContent(el, "", parentInfo, 1)
+		b.renderText(ctx, el)
 	}
 
 	s := b.output.String()
-	b.output.Reset()
+	b.output = old
 
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.TrimLeft(s, "\n")
-	s = collapseRuns(s, 2)
-	s = strings.TrimRight(s, " \t")
-	if !strings.HasSuffix(s, "\n") {
-		s += "\n"
-	}
-	if strings.HasSuffix(s, "\n\n") {
-		s = s[:len(s)-1]
-	}
+	s = ctx.cleanRender(s)
 
 	return s
 }
