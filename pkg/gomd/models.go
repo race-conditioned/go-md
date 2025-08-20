@@ -2,8 +2,10 @@ package gomd
 
 import "strings"
 
+//go:generate stringer -type=Kind
 type Kind uint8
 
+// Kind represents the type of markdown element.
 const (
 	KHeading Kind = iota
 	KText
@@ -19,6 +21,7 @@ const (
 	KQuote
 )
 
+// ListType represents the type of list in markdown.
 type ListType uint8
 
 const (
@@ -27,18 +30,12 @@ const (
 	ListOrdered
 )
 
-type MarkDownFormat string
+// Document represents a complete markdown document.
+type Document struct {
+	Children []*Element
+}
 
-// // TODO: support formats
-// const (
-// 	Slack   MarkDownFormat = "slack"
-// 	Discord MarkDownFormat = "discord"
-// )
-//
-// type BuilderConfig struct {
-// 	format MarkDownFormat
-// }
-
+// Element represents a single markdown element.
 type Element struct {
 	Kind      Kind
 	Text      string
@@ -51,23 +48,48 @@ type Element struct {
 	Children  []*Element
 }
 
-// INFO: example refactor model
-// type Element struct {
-// 	Kind     Kind
-// 	Text     string   // for text, code span, heading
-// 	Level    int      // for headings 1..6
-// 	Href     string   // link/image
-// 	Alt      string   // image alt
-// 	Lang     string   // code block language
-// 	ListKind ListType // list kind
-// 	Children []*Element
-// }
-
+// Builder is a simple markdown builder that accumulates markdown elements
 type Builder struct {
-	//	config BuilderConfig
 	output *strings.Builder
 }
 
+// Compounder is a struct that holds a Builder and provides methods to build markdown documents.
 type Compounder struct {
 	Builder Builder
 }
+
+// LEXING
+
+//go:generate stringer -type=TokenKind
+type TokenKind int
+
+const (
+	TText TokenKind = iota
+	TStar
+	TUnderscore
+	TLBracket
+	TRBracket
+	TLParen
+	TRParen
+	TBacktick
+	TBang
+	TDash
+	THash
+	TNewline
+	TOLMarker
+	TEOF
+)
+
+type (
+	// Pos represents a position in the source text.
+	Pos struct{ Line, Col int }
+	// Token represents a single token in the markdown source.
+	//
+
+	//go:generate stringer -type=Token
+	Token struct {
+		Kind   TokenKind
+		Lexeme string
+		Pos    Pos
+	}
+)

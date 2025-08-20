@@ -5,33 +5,40 @@ import (
 	"strings"
 )
 
+// listFrame represents a frame in the rendering context for lists.
 type listFrame struct {
 	kind  ListType
 	index int
 }
 
+// renderCtx holds the state for rendering a Markdown document.
 type renderCtx struct {
 	frames      []listFrame
 	lineBuffer  *strings.Builder
 	startOfLine bool
 }
 
+// lineBreak adds a newline to the line buffer and resets the startOfLine flag.
 func (ctx *renderCtx) lineBreak() {
 	ctx.lineBuffer.WriteString("\n")
 	ctx.startOfLine = true
 }
 
+// pushFrame adds a new list frame to the context.
 func (ctx *renderCtx) pushFrame(kind ListType) {
 	ctx.frames = append(ctx.frames, listFrame{kind: kind})
 }
+
+// popFrame removes the last list frame from the context.
 func (ctx *renderCtx) popFrame() { ctx.frames = ctx.frames[:len(ctx.frames)-1] }
 
+// computeIndent calculates the indentation for the current list frame based on its parent frames.
 func (ctx *renderCtx) computeIndent() (*listFrame, string) {
 	var indent string
 	f := &ctx.frames[len(ctx.frames)-1]
 
 	if len(ctx.frames) > 1 {
-		// Count parent ULs to determine visible indentation (2 spaces per UL level)
+		// count parent ULs to determine visible indentation (2 spaces per UL level)
 		countUL := 0
 		for i, loopFrame := range ctx.frames {
 			if i == len(ctx.frames)-1 {
@@ -43,12 +50,12 @@ func (ctx *renderCtx) computeIndent() (*listFrame, string) {
 		}
 		indent = strings.Repeat("  ", countUL)
 
-		// Add newline before a UL that immediately follows an OL to break visual block
+		// add newline before a UL that immediately follows an OL to break visual block
 		if len(ctx.frames) == 2 && ctx.frames[0].kind == ListOrdered && f.index == 0 {
 			indent = "\n" + indent
 		}
 
-		// If the parent is an OL and we're a child OL starting at 0, inherit index to continue numbering
+		// if the parent is an OL and we're a child OL starting at 0, inherit index to continue numbering
 		pf := ctx.frames[len(ctx.frames)-2]
 		if pf.kind == ListOrdered && f.index == 0 {
 			f.index = pf.index
@@ -57,6 +64,7 @@ func (ctx *renderCtx) computeIndent() (*listFrame, string) {
 	return f, indent
 }
 
+// listPrefix returns the appropriate prefix for the current list frame.
 func (ctx *renderCtx) listPrefix() string {
 	if len(ctx.frames) == 0 {
 		return ""
@@ -150,6 +158,7 @@ func (ctx *renderCtx) collapseRuns(s string, max int) string {
 	return b.String()
 }
 
+// cleanRender processes the rendered string to ensure it meets Markdown formatting standards.
 func (ctx *renderCtx) cleanRender(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.TrimLeft(s, "\n")

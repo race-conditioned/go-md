@@ -40,11 +40,6 @@ func (b *Builder) Textln(text string) *Element {
 	return &Element{Kind: KText, LineBreak: true, Text: text}
 }
 
-// inlineWrap concatenates the wrap to each side of s and adds a newlilne character if newLine is true.
-func inlineWrap(wrap, s string) string {
-	return wrap + s + wrap
-}
-
 // Bold returns an Element pointer representing bold markdown text.
 func (b *Builder) Bold(text string) *Element {
 	return &Element{Kind: KBold, Text: inlineWrap("**", escapeInline(text))}

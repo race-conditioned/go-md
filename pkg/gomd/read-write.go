@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// Write writes the given text to a file with the specified fileName.
 func Write(fileName, text string) error {
 	err := os.WriteFile(fileName, []byte(text), 0666)
 	if err != nil {
@@ -13,6 +14,7 @@ func Write(fileName, text string) error {
 	return nil
 }
 
+// Read reads the content of a file with the specified fileName and returns it as a byte slice.
 func Read(fileName string) ([]byte, error) {
 	bytes, err := os.ReadFile(fileName)
 	if err != nil {

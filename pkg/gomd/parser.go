@@ -1,91 +1,204 @@
 package gomd
 
 import (
+	"context"
 	"strings"
 )
 
-func ParseMD(md string, format MarkDownFormat) []*Element {
-	lines := strings.Split(md, "\n")
-	var elements *[]*Element = &[]*Element{}
-	target := elements
-	var parentStack *[]*Element = &[]*Element{}
+// Parser is a 'one-step' Markdown parser that converts Markdown text into a slice of Elements.
+type Parser struct {
+	text        string
+	elements    []*Element
+	leafNode    *[]*Element
+	parentStack []*Element
+	lineCtx     variableLineCtx
+	ctx         context.Context
+	err         error
+}
 
+// NewParser creates a new Parser instance with initialized fields.
+func NewParser() *Parser {
+	return &Parser{
+		elements:    []*Element{},
+		leafNode:    &[]*Element{},
+		parentStack: []*Element{},
+		lineCtx: variableLineCtx{
+			basePointer:      0,
+			lookAheadPointer: 0,
+			specialChars:     []IndexChar{},
+			ruleString:       "!*`[()]_",
+			cache:            []byte{},
+		},
+	}
+}
+
+// reset clears the Parser's state, allowing it to be reused for a new parse operation.
+func (p *Parser) reset() {
+	p.text = ""
+	p.elements = []*Element{}
+	p.leafNode = &p.elements
+	p.parentStack = []*Element{}
+	p.err = nil
+}
+
+// variableLineCtx holds the context for parsing a single line of Markdown text.
+type variableLineCtx struct {
+	basePointer      int
+	lookAheadPointer int
+	specialChars     []IndexChar
+	ruleString       string
+	cache            []byte
+}
+
+// indexChar is a helper struct to hold the index and character of special characters in the line.
+// using this shortcuts seeking the next special character
+type IndexChar struct {
+	i int
+	c rune
+}
+
+// reset resets the variableLineCtx to its initial state, clearing pointers and caches.
+func (ctx *variableLineCtx) reset() {
+	ctx.basePointer = 0
+	ctx.lookAheadPointer = 0
+	ctx.specialChars = []IndexChar{}
+	ctx.cache = []byte{}
+}
+
+// seek searches for the next occurrence of a rune in the specialChars slice.
+func (ctx *variableLineCtx) seek(r rune) (found bool) {
+	for _, indexChar := range ctx.specialChars {
+		if indexChar.c == r {
+			ctx.lookAheadPointer = indexChar.i
+			found = true
+			break
+		}
+	}
+	return found
+}
+
+// canceled checks if the context has been canceled or has an error.
+func (p *Parser) canceled() bool {
+	if p.ctx == nil {
+		return false
+	}
+	if err := p.ctx.Err(); err != nil {
+		p.err = err
+		return true
+	}
+	return false
+}
+
+// appendElement adds the element pointer to the leaf node
+func (p *Parser) appendElement(e *Element) {
+	*p.leafNode = append(*p.leafNode, e)
+}
+
+// flushCtxCache checks if there is any cached text in the lineCtx and appends it as a text Element.
+func (p *Parser) flushCtxCache() {
+	if len(p.lineCtx.cache) != 0 {
+		p.appendElement(&Element{Kind: KText, Text: string(p.lineCtx.cache)})
+		p.lineCtx.cache = []byte{}
+	}
+}
+
+// Parse parses the provided Markdown string and returns a slice of Elements.
+func (p *Parser) Parse(md string) []*Element {
+	elements, _ := p.ParseCtx(context.Background(), md)
+	return elements
+}
+
+// ParseCtx parses the provided Markdown string in the context of the provided context.Context.
+func (p *Parser) ParseCtx(ctx context.Context, md string) ([]*Element, error) {
+	p.ctx = ctx
+	p.reset()
+	lines := strings.Split(md, "\n")
 	nestCount := 0
+
 	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		if len(line) == 0 && i < len(lines)-1 {
+		if p.canceled() {
+			return nil, p.err
+		}
+
+		p.text = lines[i]
+		if len(p.text) == 0 && i < len(lines)-1 {
 			// is the next line a rule?
-			if i <= len(lines)-1 && len(lines) > 0 {
-				if lines[i+1] == "---" {
-					continue
-				}
+			if i <= len(lines)-1 && len(lines) > 0 && lines[i+1] == "---" {
+				continue
 			}
 
-			*elements = append(*elements, &Element{Kind: KNewLine, LineBreak: true})
-		}
-		// we allow for switching between the elements and Children slices
-		isListItem, generation, name, trimmed := identifyListedItem(line)
-		if isListItem {
-			line = trimmed
-			handleListItem(name, &nestCount, &generation, parentStack, elements, &target)
-		} else {
-			parentStack = &[]*Element{}
-			nestCount = 0
-			target = elements
+			p.appendElement(&Element{Kind: KNewLine, LineBreak: true})
 		}
 
-		if processHeader(target, line) ||
-			processHorizontalRule(target, line, &i) ||
-			processVariableLine(target, line) {
+		// we allow for switching between the elements and Children slices
+		isListItem, generation, listType := p.identifyListedItem()
+		if isListItem {
+			nestCount = p.handleListItem(listType, nestCount, generation)
+		} else {
+			p.parentStack = (p.parentStack)[:0]
+			nestCount = 0
+			p.leafNode = &p.elements
+		}
+
+		if p.processHeader() ||
+			p.processHorizontalRule(&i) ||
+			p.processVariableLine() {
 			continue
 		}
 	}
 
-	return *elements
+	return p.elements, nil
 }
 
-func identifyListedItem(line string) (bool, int, ListType, string) {
-	trimmed := strings.TrimLeft(line, " \t")
+// identifyListedItem checks if the current line starts with a list item marker (either unordered or ordered).
+func (p *Parser) identifyListedItem() (bool, int, ListType) {
+	trimmed := strings.TrimLeft(p.text, " \t")
 	listType := ListNone
+
 	if len(trimmed) >= 2 && trimmed[0] == '-' && trimmed[1] == ' ' {
 		listType = ListUnordered
 	}
+
+	// TODO: update for parsing lists longer than 9
 	if len(trimmed) >= 3 &&
 		strings.Contains("123456789", string(trimmed[0])) &&
 		trimmed[1] == '.' &&
 		trimmed[2] == ' ' {
 		listType = ListOrdered
 	}
-	if listType != ListNone {
-		spaceCount := 0
-		for _, r := range line {
-			if string(r) == "\t" {
-				spaceCount += 2
-			} else if r == ' ' {
-				spaceCount += 1
-			} else {
-				break
-			}
-		}
 
-		if listType == ListUnordered {
-			trimmed = trimmed[2:]
-		} else {
-			trimmed = trimmed[3:]
-		}
-
-		return true, (spaceCount / 2) + 1, listType, trimmed
+	if listType == ListNone {
+		return false, 0, ListNone
 	}
 
-	return false, 0, ListNone, ""
+	spaceCount := 0
+	for _, r := range p.text {
+		if string(r) == "\t" {
+			spaceCount += 2
+		} else if r == ' ' {
+			spaceCount += 1
+		} else {
+			break
+		}
+	}
+
+	if listType == ListUnordered {
+		trimmed = trimmed[2:]
+	} else {
+		trimmed = trimmed[3:]
+	}
+
+	p.text = trimmed
+	return true, (spaceCount / 2) + 1, listType
 }
 
-func handleListItem(listType ListType, nestCount, generation *int, parentStack, elements *[]*Element, target **[]*Element) {
-	if *nestCount < *generation {
+// handleListItem processes a list item based on its type and nesting level.
+func (p *Parser) handleListItem(listType ListType, nestCount int, generation int) int {
+	if nestCount < generation {
 		var targetParent *Element
 		var rootParent *Element
 		// create as many parents as required and link them in lineage order, and keep a pointer to the root parent
-		for i := 0; i < *generation-*nestCount; i++ {
+		for i := 0; i < generation-nestCount; i++ {
 			parent := &Element{Kind: KList, ListKind: listType, Children: []*Element{}}
 			if i == 0 {
 				rootParent = parent
@@ -93,431 +206,402 @@ func handleListItem(listType ListType, nestCount, generation *int, parentStack, 
 				targetParent.Children = append(targetParent.Children, parent)
 			}
 			targetParent = parent
-
-			*parentStack = append(*parentStack, parent)
+			p.parentStack = append(p.parentStack, parent)
 		}
 		// add the parent built with chidlren (if required) to the current target
-		**target = append(**target, rootParent)
+		p.appendElement(rootParent)
 
 		// now we need to move the pointer to the most junior child
-		*target = &(*parentStack)[len(*parentStack)-1].Children
-		*nestCount = *generation
-	} else if *nestCount > *generation {
-		if len(*parentStack) > 0 {
-			for i := 0; i < *nestCount-*generation; i++ {
-				*parentStack = (*parentStack)[:len(*parentStack)-1]
-			}
-		}
-		*nestCount = *generation
-
-		if len(*parentStack) > 0 {
-			*target = &(*parentStack)[len(*parentStack)-1].Children
-		} else {
-			*target = elements
-		}
+		p.leafNode = &(p.parentStack)[len(p.parentStack)-1].Children
+		nestCount = generation
+		return nestCount
 	}
+
+	if len(p.parentStack) == 0 {
+		p.leafNode = &p.elements
+		return generation
+	}
+
+	for i := 0; i < nestCount-generation; i++ {
+		p.parentStack = (p.parentStack)[:len(p.parentStack)-1]
+	}
+
+	p.leafNode = &(p.parentStack)[len(p.parentStack)-1].Children
+
+	return nestCount
 }
 
 // processHeader determines if the line has a valid header by counting hashes and checking for a space that follows immediately.
 // it returns true and appends the Element pointer to the dereferenced *[]*Element slice if it identifies a valid header.
 // it returns false and does nothing if no valid header is found.
 // it identifies the header type based on the hash count
-func processHeader(elements *[]*Element, line string) bool {
-	if strings.HasPrefix(line, "#") {
-		hashCount := 0
-		isHeader := true
+func (p *Parser) processHeader() bool {
+	if !strings.HasPrefix(p.text, "#") {
+		return false
+	}
+	level := 0
+	isHeader := true
 
-		for i, r := range line {
-			if r == '#' {
-				hashCount = i + 1
-			} else if hashCount > 0 {
-				if r != ' ' {
-					isHeader = false
-				}
-				break
-			} else {
+	for i, r := range p.text {
+		if r == '#' {
+			level = i + 1
+		} else if level > 0 {
+			if r != ' ' {
 				isHeader = false
 			}
-		}
-
-		if isHeader {
-			*elements = append(*elements, &Element{Kind: KHeading, Level: hashCount, LineBreak: true, Text: strings.TrimLeft(line, "# ")})
-			return isHeader
+			break
+		} else {
+			isHeader = false
 		}
 	}
-	return false
+
+	if isHeader {
+		p.appendElement(&Element{Kind: KHeading, Level: level, LineBreak: true, Text: strings.TrimRight(p.text[level+1:], " ")})
+	}
+	return isHeader
 }
 
-func processHorizontalRule(elements *[]*Element, line string, index *int) bool {
-	if strings.HasPrefix(line, "---") {
-		invalidChar := strings.ContainsFunc(line, func(r rune) bool {
-			if r != ' ' && r != '-' {
-				return true
-			}
-			return false
-		})
+// processHorizontalRule checks if the line starts with "---" and contains only valid characters.
+func (p *Parser) processHorizontalRule(index *int) bool {
+	if !strings.HasPrefix(p.text, "---") {
+		return false
+	}
 
-		if !invalidChar {
-			*elements = append(*elements, &Element{Kind: KRule, LineBreak: true, Text: "\n" + line + "\n"})
-			*index = *index + 1
+	invalidChar := strings.ContainsFunc(p.text, func(r rune) bool {
+		if r != ' ' && r != '-' {
 			return true
 		}
+		return false
+	})
+
+	if !invalidChar {
+		p.appendElement(&Element{Kind: KRule, LineBreak: true, Text: "\n" + p.text + "\n"})
+		*index = *index + 1
 	}
-	return false
+	return !invalidChar
 }
 
-type IndexChar struct {
-	i int
-	c rune
-}
-
-func processVariableLine(elements *[]*Element, line string) bool {
-	ruleString := "!*`[()]_"
-	specialChars := []*IndexChar{}
-	for i, r := range line {
-		if strings.Contains(ruleString, string(r)) {
-			specialChars = append(specialChars, &IndexChar{i: i, c: r})
+// processVariableLine processes a line of text for Markdown syntax elements such as bold, italic, links, images, and code spans.
+func (p *Parser) processVariableLine() bool {
+	p.lineCtx.reset()
+	for i, r := range p.text {
+		if strings.Contains(p.lineCtx.ruleString, string(r)) {
+			p.lineCtx.specialChars = append(p.lineCtx.specialChars, IndexChar{i: i, c: r})
 		}
 	}
 
-	cache := []byte{}
-	for basePointer, lookAheadPointer := 0, 0; basePointer < len(line)-1; basePointer++ {
-		char := string(line[basePointer])
-		if strings.Contains(ruleString, char) {
+	for ; p.lineCtx.basePointer < len(p.text)-1; p.lineCtx.basePointer++ {
+		char := string(p.text[p.lineCtx.basePointer])
+		if strings.Contains(p.lineCtx.ruleString, char) {
 			switch char {
 			case "*":
-				handleBold(elements, line, &specialChars, &cache, &basePointer, &lookAheadPointer)
+				p.handleBold(&p.lineCtx)
 				continue
 			case "_":
-				handleItalic(elements, line, &specialChars, &cache, &basePointer, &lookAheadPointer)
+				p.handleItalic(&p.lineCtx)
 				continue
 			case "[":
-				handleLink(elements, line, &specialChars, &cache, &basePointer, &lookAheadPointer)
+				p.handleLink(&p.lineCtx)
 				continue
 			case "!":
-				handleImage(elements, line, &specialChars, &cache, &basePointer, &lookAheadPointer)
+				p.handleImage(&p.lineCtx)
 				continue
 			case "`":
-				handleCode(elements, line, &specialChars, &cache, &basePointer, &lookAheadPointer)
+				p.handleCode(&p.lineCtx)
 				continue
 			}
 		}
-		cache = append(cache, line[basePointer])
+		p.lineCtx.cache = append(p.lineCtx.cache, p.text[p.lineCtx.basePointer])
 	}
-	if len(cache) != 0 || len(line) == 1 {
-		*elements = append(*elements, &Element{Kind: KText, LineBreak: true, Text: string(cache) + string(line[len(line)-1])})
+	if len(p.lineCtx.cache) != 0 || len(p.text) == 1 {
+		last := ""
+		if len(p.text) > 0 {
+			last = string(p.text[len(p.text)-1])
+		}
+		p.appendElement(&Element{Kind: KText, LineBreak: true, Text: string(p.lineCtx.cache) + last})
 	}
 
 	return false
 }
 
-func handleItalic(elements *[]*Element, line string, specialChars *[]*IndexChar, cache *[]byte, basePointer, lookAheadPointer *int) {
-	// let's unshift 1 from specialChars
-	*specialChars = (*specialChars)[1:]
+// handleBold processes bold text enclosed in double asterisks "**...**".
+func (p *Parser) handleBold(ctx *variableLineCtx) {
+	if p.err != nil {
+		return
+	}
+	if p.text[ctx.basePointer+1] != '*' {
+		return
+	}
 
-	found := false
-	for _, indexChar := range *specialChars {
-		if indexChar.c == '_' {
-			*lookAheadPointer = indexChar.i
-			found = true
+	ctx.specialChars = ctx.specialChars[2:]
+
+	if !ctx.seek('*') || p.text[ctx.lookAheadPointer+1] != '*' {
+		return
+	}
+
+	// now we have a range of text in the bold between the basePointer and lookAheadPointer that is bold
+	boldText := p.text[ctx.basePointer+2 : ctx.lookAheadPointer]
+	// clear the cache to a text element
+	p.flushCtxCache()
+	// if there are no more chars then we use the ln version
+	if ctx.lookAheadPointer+1 == len(p.text)-1 {
+		p.appendElement(&Element{Kind: KBold, LineBreak: true, Text: inlineWrap("**", boldText)})
+	} else {
+		p.appendElement(&Element{Kind: KBold, Text: inlineWrap("**", boldText)})
+	}
+
+	// remove the further double * from specialChars
+	newSpecialChars := []IndexChar{}
+	count := 0
+	for i, specialChar := range ctx.specialChars {
+		if count == 2 {
+			newSpecialChars = append(newSpecialChars, ctx.specialChars[i:]...)
 			break
 		}
-	}
-
-	if found {
-		italicText := line[*basePointer+1 : *lookAheadPointer]
-		// clear the cache to a text element
-		if len(*cache) != 0 {
-			*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
-			*cache = []byte{}
-		}
-		// if there are no more chars we use the ln version
-		if *lookAheadPointer == len(line)-1 {
-			*elements = append(*elements, &Element{Kind: KItalic, LineBreak: true, Text: "_" + italicText + "_"})
+		if specialChar.c == '*' {
+			count++
 		} else {
-			*elements = append(*elements, &Element{Kind: KItalic, Text: "_" + italicText + "_"})
+			newSpecialChars = append(newSpecialChars, specialChar)
 		}
-
-		// let's remove special chars that are no more of use to us
-		newSpecialChars := []*IndexChar{}
-		count := 0
-		for i, specialChar := range *specialChars {
-			if count == 1 {
-				newSpecialChars = append(newSpecialChars, (*specialChars)[i:]...)
-				break
-			}
-			if specialChar.c == '_' {
-				count++
-			} else {
-				newSpecialChars = append(newSpecialChars, specialChar)
-			}
-		}
-
-		*specialChars = newSpecialChars
-		// shift the pointer up, it gets incremented by 1 in the loop
-		*basePointer = *lookAheadPointer
-	} else {
-		// we can ignore the underscore character as this is not an italic block
-		*cache = append(*cache, line[*basePointer])
 	}
+	ctx.specialChars = newSpecialChars
+	// we can increment the lookaheadpointer by one as it is currently targeting the first closing *
+	ctx.lookAheadPointer = ctx.lookAheadPointer + 1
+	// shift the pointer up, it gets incremented by 1 in the loop
+	ctx.basePointer = ctx.lookAheadPointer
 }
 
-func handleBold(elements *[]*Element, line string, specialChars *[]*IndexChar, cache *[]byte, basePointer, lookAheadPointer *int) {
-	// is the next char a *? if so it's bold opener
-	if line[*basePointer+1] == '*' {
-		// let's unshift 2 from specialChars
-		*specialChars = (*specialChars)[2:]
-
-		found := false
-		for _, indexChar := range *specialChars {
-			if indexChar.c == '*' {
-				*lookAheadPointer = indexChar.i
-				found = true
-				break
-			}
-		}
-
-		if found && line[*lookAheadPointer+1] == '*' {
-			// now we have a range of text in the bold between the basePointer and lookAheadPointer that is bold
-			boldText := line[*basePointer+2 : *lookAheadPointer]
-			// clear the cache to a text element
-			if len(*cache) != 0 {
-				*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
-				*cache = []byte{}
-			}
-			// if there are no more chars then we use the ln version
-			if *lookAheadPointer+1 == len(line)-1 {
-				*elements = append(*elements, &Element{Kind: KBold, LineBreak: true, Text: "**" + boldText + "**"})
-			} else {
-				*elements = append(*elements, &Element{Kind: KBold, Text: "**" + boldText + "**"})
-			}
-
-			// remove the further double * from specialChars
-			newSpecialChars := []*IndexChar{}
-			count := 0
-			for i, specialChar := range *specialChars {
-				if count == 2 {
-					newSpecialChars = append(newSpecialChars, (*specialChars)[i:]...)
-					break
-				}
-				if specialChar.c == '*' {
-					count++
-				} else {
-					newSpecialChars = append(newSpecialChars, specialChar)
-				}
-			}
-			*specialChars = newSpecialChars
-			// we can increment the lookaheadpointer by one as it is currently targeting the first closing *
-			*lookAheadPointer = *lookAheadPointer + 1
-			// shift the pointer up, it gets incremented by 1 in the loop
-			*basePointer = *lookAheadPointer
-		} else {
-			// we can ignore the * character, and the following one as there is no bold block
-			*cache = append(*cache, line[*basePointer], line[*basePointer+1])
-			*basePointer++
-		}
+// handleItalic processes italic text enclosed in single underscores "_..._".
+func (p *Parser) handleItalic(ctx *variableLineCtx) {
+	if p.err != nil {
+		return
 	}
-
-	return
-}
-
-func handleLink(elements *[]*Element, line string, specialChars *[]*IndexChar, cache *[]byte, basePointer, lookAheadPointer *int) { // link
 	// let's unshift 1 from specialChars
-	*specialChars = (*specialChars)[1:]
+	ctx.specialChars = ctx.specialChars[1:]
+
+	if !ctx.seek('_') {
+		return
+	}
+
+	italicText := p.text[ctx.basePointer+1 : ctx.lookAheadPointer]
+	// clear the cache to a text element
+
+	p.flushCtxCache()
+	// if there are no more chars we use the ln version
+	if ctx.lookAheadPointer == len(p.text)-1 {
+		p.appendElement(&Element{Kind: KItalic, LineBreak: true, Text: inlineWrap("_", italicText)})
+	} else {
+		p.appendElement(&Element{Kind: KItalic, Text: inlineWrap("_", italicText)})
+	}
+
+	// let's remove special chars that are no more of use to us
+	newSpecialChars := []IndexChar{}
+	count := 0
+	for i, specialChar := range ctx.specialChars {
+		if count == 1 {
+			newSpecialChars = append(newSpecialChars, ctx.specialChars[i:]...)
+			break
+		}
+		if specialChar.c == '_' {
+			count++
+		} else {
+			newSpecialChars = append(newSpecialChars, specialChar)
+		}
+	}
+
+	ctx.specialChars = newSpecialChars
+	// shift the pointer up, it gets incremented by 1 in the loop
+	ctx.basePointer = ctx.lookAheadPointer
+}
+
+// handleItalic processes italic text enclosed in single underscores "_..._".
+func (p *Parser) handleLink(ctx *variableLineCtx) {
+	if p.err != nil {
+		return
+	}
+	// let's unshift 1 from specialChars
+	ctx.specialChars = ctx.specialChars[1:]
 
 	found := false
 	tempLookAheadPointer := 0
-	display := ""
-	for _, indexChar := range *specialChars {
+	for _, indexChar := range ctx.specialChars {
 		if indexChar.c == ']' {
 			found = true
 			tempLookAheadPointer = indexChar.i
 			break
 		}
 	}
-	if found && string(line[tempLookAheadPointer+1]) == "(" {
-		// ok we have a square brackets enclosed text
-		display = line[*basePointer+1 : tempLookAheadPointer]
-
-		// continue the same again but for parenthesis
-		foundLink := false
-		link := ""
-
-		for _, indexChar := range *specialChars {
-			if indexChar.i <= tempLookAheadPointer+1 {
-				continue
-			}
-			if indexChar.c == ')' {
-				foundLink = true
-				*lookAheadPointer = indexChar.i
-				break
-			}
-		}
-		if foundLink {
-			// we definitely have a link
-			link = line[tempLookAheadPointer+2 : *lookAheadPointer]
-			// is there cache to append?
-			if len(*cache) != 0 {
-				*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
-				*cache = []byte{}
-			}
-			// if there are no more chars we use the ln version
-			if *lookAheadPointer == len(line)-1 {
-				*elements = append(*elements, &Element{Kind: KLink, LineBreak: true, Text: display, Href: link})
-			} else {
-				*elements = append(*elements, &Element{Kind: KLink, Text: display, Href: link})
-			}
-			// let's clear out the special chars that are of no use to us
-			newSpecialChars := []*IndexChar{}
-			count := 0
-			foundClosingSquare := false
-			for i, specialChar := range *specialChars {
-				if count == 1 {
-					newSpecialChars = append(newSpecialChars, (*specialChars)[i:]...)
-					break
-				}
-				if specialChar.c == ']' {
-					foundClosingSquare = true
-				} else if specialChar.c == ')' && foundClosingSquare {
-					count++
-				} else if strings.Contains(string(specialChar.c), "[]()") {
-					newSpecialChars = append(newSpecialChars, specialChar)
-				}
-			}
-			*specialChars = newSpecialChars
-			// shift the pointer up, it gets incremented by 1 in the loop
-			*basePointer = *lookAheadPointer + 1
-		} else {
-			*cache = append(*cache, line[*basePointer])
-		}
-	} else {
-		*cache = append(*cache, line[*basePointer])
+	if !found || string(p.text[tempLookAheadPointer+1]) != "(" {
+		return
 	}
-}
+	// ok we have a square brackets enclosed text
+	display := p.text[ctx.basePointer+1 : tempLookAheadPointer]
 
-func handleImage(elements *[]*Element, line string, specialChars *[]*IndexChar, cache *[]byte, basePointer, lookAheadPointer *int) { // link
-	*specialChars = (*specialChars)[1:]
-
-	if string(line[*basePointer+1]) == "[" {
-		// so we have an ! and a [
-		found := false
-		tempLookAheadPointer := 0
-		display := ""
-		for _, indexChar := range *specialChars {
-			if indexChar.c == ']' {
-				found = true
-				tempLookAheadPointer = indexChar.i
-				break
-			}
+	// continue the same again but for parenthesis
+	foundLink := false
+	for _, indexChar := range ctx.specialChars {
+		if indexChar.i <= tempLookAheadPointer+1 {
+			continue
 		}
-		if found && string(line[tempLookAheadPointer+1]) == "(" {
-			// ok we have a square brackets enclosed text
-			display = line[*basePointer+2 : tempLookAheadPointer]
-
-			// continue the same again but for parenthesis
-			foundImage := false
-			link := ""
-
-			for _, indexChar := range *specialChars {
-				if indexChar.i <= tempLookAheadPointer+1 {
-					continue
-				}
-				if indexChar.c == ')' {
-					foundImage = true
-					*lookAheadPointer = indexChar.i
-					break
-				}
-			}
-			if foundImage {
-				// we have
-				link = line[tempLookAheadPointer+2 : *lookAheadPointer]
-				// flush the cache to a text element
-				if len(*cache) != 0 {
-					*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
-					*cache = []byte{}
-				}
-				// images are always "ln"
-				*elements = append(*elements, &Element{Kind: KImage, LineBreak: true, Alt: display, Href: link})
-
-				// now get rid of the special chars that are of no use to us
-				newSpecialChars := []*IndexChar{}
-				count := 0
-				foundClosingSquare := false
-				for i, specialChar := range *specialChars {
-					if count == 1 {
-						newSpecialChars = append(newSpecialChars, (*specialChars)[i:]...)
-						break
-					}
-					if specialChar.c == ']' {
-						foundClosingSquare = true
-					}
-					if specialChar.c == ')' && foundClosingSquare {
-						count++
-					} else {
-						newSpecialChars = append(newSpecialChars, specialChar)
-					}
-				}
-				*specialChars = newSpecialChars
-				// shift the pointer up, it gets incremented by 1 in the loop
-				*basePointer = *lookAheadPointer + 1
-			} else {
-				*cache = append(*cache, line[*basePointer])
-			}
-		} else {
-			*cache = append(*cache, line[*basePointer])
-		}
-	} else {
-		*cache = append(*cache, line[*basePointer])
-	}
-}
-
-func handleCode(elements *[]*Element, line string, specialChars *[]*IndexChar, cache *[]byte, basePointer, lookAheadPointer *int) {
-	// let's unshift one char from specialChars
-	*specialChars = (*specialChars)[1:]
-
-	found := false
-	for _, indexChar := range *specialChars {
-		if indexChar.c == '`' {
-			*lookAheadPointer = indexChar.i
-			found = true
+		if indexChar.c == ')' {
+			foundLink = true
+			ctx.lookAheadPointer = indexChar.i
 			break
 		}
 	}
 
-	if found {
-		// we have a code block
-		codeText := line[*basePointer+1 : *lookAheadPointer]
-		// flush the cache to a text element
-		if len(*cache) != 0 {
-			*elements = append(*elements, &Element{Kind: KText, Text: string(*cache)})
-			*cache = []byte{}
-		}
-		// if there are no more chars we create an ln element
-		if *lookAheadPointer == len(line)-1 {
-			*elements = append(*elements, &Element{Kind: KCodeSpan, LineBreak: true, Text: "`" + codeText + "`"})
-		} else {
-			*elements = append(*elements, &Element{Kind: KCodeSpan, Text: "`" + codeText + "`"})
-		}
-
-		// let's get rid of the specialChars that are of no use to us
-		newSpecialChars := []*IndexChar{}
-		count := 0
-		for i, specialChar := range *specialChars {
-			if count == 1 {
-				newSpecialChars = append(newSpecialChars, (*specialChars)[i:]...)
-				break
-			}
-			if specialChar.c == '`' {
-				count++
-			} else {
-				newSpecialChars = append(newSpecialChars, specialChar)
-			}
-		}
-		*specialChars = newSpecialChars
-		// shift the pointer up, it gets incremented by 1 in the loop
-		*basePointer = *lookAheadPointer
-	} else {
-		// we can ignore the ` character
-		*cache = append(*cache, line[*basePointer])
+	if !foundLink {
+		return
 	}
+
+	// we definitely have a link
+	link := p.text[tempLookAheadPointer+2 : ctx.lookAheadPointer]
+	// flush the cache
+	p.flushCtxCache()
+	// if there are no more chars we use the ln version
+	if ctx.lookAheadPointer == len(p.text)-1 {
+		p.appendElement(&Element{Kind: KLink, LineBreak: true, Text: display, Href: link})
+	} else {
+		p.appendElement(&Element{Kind: KLink, Text: display, Href: link})
+	}
+	// let's clear out the special chars that are of no use to us
+	newSpecialChars := []IndexChar{}
+	count := 0
+	foundClosingSquare := false
+	for i, specialChar := range ctx.specialChars {
+		if count == 1 {
+			newSpecialChars = append(newSpecialChars, ctx.specialChars[i:]...)
+			break
+		}
+		if specialChar.c == ']' {
+			foundClosingSquare = true
+		} else if specialChar.c == ')' && foundClosingSquare {
+			count++
+		} else if strings.Contains(string(specialChar.c), "[]()") {
+			newSpecialChars = append(newSpecialChars, specialChar)
+		}
+	}
+	ctx.specialChars = newSpecialChars
+	// shift the pointer up, it gets incremented by 1 in the loop
+	ctx.basePointer = ctx.lookAheadPointer + 1
+}
+
+// handleImage processes images in Markdown syntax, which are similar to links but start with an exclamation mark.
+func (p *Parser) handleImage(ctx *variableLineCtx) {
+	if p.err != nil {
+		return
+	}
+
+	ctx.specialChars = ctx.specialChars[1:]
+
+	if string(p.text[ctx.basePointer+1]) != "[" {
+		return
+	}
+
+	// so we have an ! and a [
+	found := false
+	tempLookAheadPointer := 0
+	for _, indexChar := range ctx.specialChars {
+		if indexChar.c == ']' {
+			found = true
+			tempLookAheadPointer = indexChar.i
+			break
+		}
+	}
+
+	if !found || string(p.text[tempLookAheadPointer+1]) != "(" {
+		return
+	}
+
+	// ok we have a square brackets enclosed text
+	alt := p.text[ctx.basePointer+2 : tempLookAheadPointer]
+
+	// continue the same again but for parenthesis
+	foundImage := false
+
+	for _, indexChar := range ctx.specialChars {
+		if indexChar.i <= tempLookAheadPointer+1 {
+			continue
+		}
+		if indexChar.c == ')' {
+			foundImage = true
+			ctx.lookAheadPointer = indexChar.i
+			break
+		}
+	}
+
+	if !foundImage {
+		return
+	}
+
+	// we have
+	href := p.text[tempLookAheadPointer+2 : ctx.lookAheadPointer]
+	// flush the cache to a text element
+	p.flushCtxCache()
+	// images are always "ln"
+	p.appendElement(&Element{Kind: KImage, LineBreak: true, Alt: alt, Href: href})
+
+	// now get rid of the special chars that are of no use to us
+	newSpecialChars := []IndexChar{}
+	count := 0
+	foundClosingSquare := false
+	for i, specialChar := range ctx.specialChars {
+		if count == 1 {
+			newSpecialChars = append(newSpecialChars, ctx.specialChars[i:]...)
+			break
+		}
+		if specialChar.c == ']' {
+			foundClosingSquare = true
+		}
+		if specialChar.c == ')' && foundClosingSquare {
+			count++
+		} else {
+			newSpecialChars = append(newSpecialChars, specialChar)
+		}
+	}
+	ctx.specialChars = newSpecialChars
+	// shift the pointer up, it gets incremented by 1 in the loop
+	ctx.basePointer = ctx.lookAheadPointer + 1
+}
+
+// handleCode processes inline code spans enclosed in backticks "`...`".
+func (p *Parser) handleCode(ctx *variableLineCtx) {
+	if p.err != nil {
+		return
+	}
+	// let's unshift one char from specialChars
+	ctx.specialChars = ctx.specialChars[1:]
+
+	if !ctx.seek('`') {
+		return
+	}
+
+	// we have a code block
+	codeText := p.text[ctx.basePointer+1 : ctx.lookAheadPointer]
+	// flush the cache to a text element
+	p.flushCtxCache()
+	// if there are no more chars we create an ln element
+	if ctx.lookAheadPointer == len(p.text)-1 {
+		p.appendElement(&Element{Kind: KCodeSpan, LineBreak: true, Text: "`" + codeText + "`"})
+	} else {
+		p.appendElement(&Element{Kind: KCodeSpan, Text: "`" + codeText + "`"})
+	}
+
+	// let's get rid of the specialChars that are of no use to us
+	newSpecialChars := []IndexChar{}
+	count := 0
+	for i, specialChar := range ctx.specialChars {
+		if count == 1 {
+			newSpecialChars = append(newSpecialChars, ctx.specialChars[i:]...)
+			break
+		}
+		if specialChar.c == '`' {
+			count++
+		} else {
+			newSpecialChars = append(newSpecialChars, specialChar)
+		}
+	}
+	ctx.specialChars = newSpecialChars
+	// shift the pointer up, it gets incremented by 1 in the loop
+	ctx.basePointer = ctx.lookAheadPointer
 }

@@ -227,7 +227,6 @@ func TestDeepNesting(t *testing.T) {
 				),
 			),
 		},
-		// WARN: deep nesting is just not in scope, it's nice to have some cases
 		{
 			"deepnes3", "nest3.md", b.Build(
 				b.OL(
@@ -256,8 +255,6 @@ func TestDeepNesting(t *testing.T) {
 		},
 	}
 
-	_ = Write("check.md", cases[2].got)
-
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -272,7 +269,6 @@ func TestDeepNesting(t *testing.T) {
 	}
 }
 
-// TODO: fix edge cases (rule, colon in header)
 func footer(comp string) []*Element {
 	b := Builder{}
 	return []*Element{
