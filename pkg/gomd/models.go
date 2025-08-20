@@ -1,7 +1,5 @@
 package gomd
 
-import "strings"
-
 //go:generate stringer -type=Kind
 type Kind uint8
 
@@ -49,9 +47,7 @@ type Element struct {
 }
 
 // Builder is a simple markdown builder that accumulates markdown elements
-type Builder struct {
-	output *strings.Builder
-}
+type Builder struct{}
 
 // Compounder is a struct that holds a Builder and provides methods to build markdown documents.
 type Compounder struct {
@@ -84,9 +80,6 @@ type (
 	// Pos represents a position in the source text.
 	Pos struct{ Line, Col int }
 	// Token represents a single token in the markdown source.
-	//
-
-	//go:generate stringer -type=Token
 	Token struct {
 		Kind   TokenKind
 		Lexeme string

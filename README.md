@@ -8,6 +8,23 @@ Markdown has a loose grammar with lots of edge cases. gomd focuses on a pragmati
 
 This project is a WIP; early versions may have breaking changes.
 
+## Why this exists
+
+A lot of Markdown libraries are either heavyweight, strictly spec-driven, or hard to round-trip. gomd aims to be:
+
+- 🪶 Lightweight: small surface area, simple data model.
+- ⚡ Fast: a one-pass parser for the common path, with snapshot benches below.
+- 🧠 Practical: stable subset that round-trips well for programmatic generation and edits.
+- 🛑 Cancellable: both lexer and parsers respect context cancel/timeout.
+- 🔧 Tooling-friendly: an optional tokenize → parse pipeline with positions for editors/linters.
+
+## Install
+
+```bash
+go get github.com/race-conditioned/go-md/pkg/gomd
+
+```
+
 ## Two parsing routes
 
 gomd supports two parse paths:
@@ -30,13 +47,13 @@ p := gomd.NewParser()
 b := gomd.Builder{}
 
 ctx := context.Background()
-els, err := p.ParseCtx(ctx, src, "")
+els, err := p.ParseCtx(ctx, src)
 if err != nil { /* handle */ }
 
 md := gomd.Builder{}.Build(els...)
 
 // non-context:
-els2 := p.Parse(src, "")
+els2 := p.Parse(src)
 md2  := b.Build(els2...)
 
 ```
@@ -69,6 +86,28 @@ Tokens unlock tooling that a one-pass parser can’t easily support:
 - Incremental parsing (reuse tokens between edits).
 
 _If you don’t need any of that, stick to the fast parser._
+
+## Feature set
+
+- **Builder API** — headings (H1–H6), text, bold, italic, code spans, images, links, rules, lists (UL/OL), block quotes, fenced code blocks.
+- **Compounder API** — ergonomic helpers for common sections and titled lists (e.g., Section2, UL3, OL2) that compose cleanly.
+- **Render quality** — newline collapsing, whitespace trimming, predictable list prefixes/indentation.
+- **Two parse routes** — (1) fast one-pass parser; (2) tokenize → parse pipeline with token positions.
+- **Context support** — TokenizeCtx / ParseTokensCtx / ParseCtx honor cancellation and timeouts.
+- **Round-trip** — builder ⇄ parser tests ensure stable text output for the supported subset.
+- **Fuzz & benches** — fuzz tests for lexer round-trip; benchmarks for parsers and end-to-end build.
+- **File I/O** — tiny helpers: Read(file), Write(file, text).
+- **Thread-friendly builder** — Builder is now pure/stateless (no internal buffers).
+
+## Compatibility & limitations
+
+- Not full CommonMark — this is a pragmatic subset tuned for round-tripping.
+- Ordered-list markers: one-pass and pipeline aim for parity; multi-digit and ")"/"." styles supported in the pipeline; one-pass focuses on the common case.
+- Deep list nesting: partial support (tracked in tests/roadmap).
+- Horizontal rules: recognized as lines of dashes/spaces with ≥3 dashes.
+- Escaping: inline emphasis/code/link text/url escaping is pragmatic; edge cases may differ from strict CommonMark.
+
+_If you hit an edge case, please open an issue with a minimal repro._
 
 ## Usage
 
@@ -113,8 +152,7 @@ func main() {
  template = append(template, body...)
 
  md := b.Build(template...)
- err := gomd.Write("my-company.md", md)
- if err != nil {
+ if err := gomd.Write("my-company.md", md); err != nil {
   // handle error
  }
 }
@@ -144,8 +182,7 @@ func main() {
    c.UL2("Highlights", []string{"Ops", "Finance", "Eng"}),
   )...,
  )
- err := gomd.Write("report.md", doc)
- if err != nil {
+ if err := gomd.Write("report.md", doc); err != nil {
   // handle error
  }
 }
@@ -199,8 +236,7 @@ func main() {
   )...,
  )
 
- err := gomd.Write("my-company.md", md)
- if err != nil {
+ if err := gomd.Write("my-company.md", md); err != nil {
   // handle error
  }
 }
@@ -245,15 +281,14 @@ func main() {
   )...,
  )
 
- err := gomd.Write("my-company.md", md)
- if err != nil {
+ if err := gomd.Write("my-company.md", md); err != nil {
   // handle error
  }
 }
 
 ```
 
-## Features
+## At a glance
 
 - markdown builder ✅
 - markdown compounder ✅
@@ -281,6 +316,8 @@ func main() {
 
 _Takeaway: old parser is \~3x faster and \~6–7x lower memory on large docs; gap is even bigger on tiny docs._
 
+_Note: numbers vary by Go version/CPU; these are for relative shape, not absolute truth._
+
 ## Contributing
 
 PRs welcome! A few tips:
@@ -301,5 +338,34 @@ go test ./pkg/gomd/... | ./pkg/bin/colorize
 
 # run benches
 go test -bench=. -benchmem -run '^$' ./pkg/gomd/...
+
+```
+
+## License
+
+Licensed under the MIT License (full text below).
+
+```text
+MIT License
+
+Copyright (c) 2025 Author
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
 ```

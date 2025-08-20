@@ -86,7 +86,7 @@ func (ctx *renderCtx) listPrefix() string {
 
 // renderText is used to parse an Element and recurse through the associated Children Elements.
 // It converts Element pointers into compatible markdown text and handles nesting.
-func (ctx *renderCtx) renderText(b *Builder, el *Element) {
+func (ctx *renderCtx) renderText(b *Builder, buf *strings.Builder, el *Element) {
 	if el == nil {
 		return
 	}
@@ -115,10 +115,10 @@ func (ctx *renderCtx) renderText(b *Builder, el *Element) {
 	if el.LineBreak {
 		if ctx.lineBuffer.String() != "" {
 			ctx.lineBreak()
-			b.output.WriteString(ctx.listPrefix() + ctx.lineBuffer.String())
+			buf.WriteString(ctx.listPrefix() + ctx.lineBuffer.String())
 		} else {
 			ctx.lineBreak()
-			b.output.WriteString(ctx.lineBuffer.String())
+			buf.WriteString(ctx.lineBuffer.String())
 		}
 		ctx.lineBuffer.Reset()
 	}
@@ -126,7 +126,7 @@ func (ctx *renderCtx) renderText(b *Builder, el *Element) {
 	b.cleanLastElement(el.Children)
 	for _, child := range el.Children {
 		ctx.startOfLine = true
-		ctx.renderText(b, child)
+		ctx.renderText(b, buf, child)
 	}
 }
 

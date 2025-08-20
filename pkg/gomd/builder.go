@@ -29,7 +29,7 @@ func (b *Builder) H4(text string) *Element { return b.heading(4, text) }
 // H5 returns an Element pointer representing a level-5 heading.
 func (b *Builder) H5(text string) *Element { return b.heading(5, text) }
 
-// H6 returns an Element pointer representing a level-5 heading.
+// H6 returns an Element pointer representing a level-6 heading.
 func (b *Builder) H6(text string) *Element { return b.heading(6, text) }
 
 // Text returns an Element pointer representing markdown text.
@@ -98,18 +98,18 @@ func (b *Builder) OL(Children ...*Element) *Element {
 	return &Element{Kind: KList, ListKind: ListOrdered, Children: Children}
 }
 
-// Link returns an Element pointer repersenting a markdown link.
+// Link returns an Element pointer representing a markdown link.
 func (b *Builder) Link(display, link string) *Element {
 	// INFO: trailing space is used to allow for spacing multiple links
 	return &Element{Kind: KLink, Text: escapeLinkText(display), Href: escapeURL(link)}
 }
 
-// Link returns an Element pointer repersenting a markdown link followed by a newline character.
+// Linkln returns an Element pointer representing a markdown link followed by a newline character.
 func (b *Builder) Linkln(display, link string) *Element {
 	return &Element{Kind: KLink, LineBreak: true, Text: escapeLinkText(display), Href: escapeURL(link)}
 }
 
-// Img returns an Element pointer repersenting a markdown image followed by a newline character.
+// Img returns an Element pointer representing a markdown image followed by a newline character.
 func (b *Builder) Img(alt, link string) *Element {
 	return &Element{Kind: KImage, LineBreak: true, Alt: alt, Href: link}
 }
@@ -138,8 +138,8 @@ func (b *Builder) cleanLastElement(elements []*Element) {
 	}
 }
 
-func (b *Builder) renderText(ctx *renderCtx, el *Element) {
-	ctx.renderText(b, el)
+func (b *Builder) renderText(ctx *renderCtx, buf *strings.Builder, el *Element) {
+	ctx.renderText(b, buf, el)
 }
 
 // Build consumes Element pointers.
@@ -152,23 +152,14 @@ func (b *Builder) Build(elements ...*Element) string {
 		startOfLine: false,
 	}
 
-	// set render output to a local buffer for go routine safety
-	old := b.output
-	b.output = &buf
-
 	b.cleanLastElement(elements)
 
 	for _, el := range elements {
 		if el == nil {
 			continue
 		}
-		b.renderText(ctx, el)
+		b.renderText(ctx, &buf, el)
 	}
 
-	s := b.output.String()
-	b.output = old
-
-	s = ctx.cleanRender(s)
-
-	return s
+	return ctx.cleanRender(buf.String())
 }

@@ -22,6 +22,53 @@ func footer(comp string) []*gomd.Element {
 	}
 }
 
+func installSection() []*gomd.Element {
+	b := gomd.Builder{}
+	return []*gomd.Element{
+		b.H2("Install"),
+		b.NL(),
+		b.CodeFence("bash", "go get github.com/race-conditioned/go-md/pkg/gomd"),
+		b.NL(),
+	}
+}
+
+func whyThisExistsSection() []*gomd.Element {
+	b := gomd.Builder{}
+	return []*gomd.Element{
+		b.H2("Why this exists"),
+		b.NL(),
+		b.Textln("A lot of Markdown libraries are either heavyweight, strictly spec-driven, or hard to round-trip. gomd aims to be:"),
+		b.UL(
+			b.Textln("🪶 Lightweight: small surface area, simple data model."),
+			b.Textln("⚡ Fast: a one-pass parser for the common path, with snapshot benches below."),
+			b.Textln("🧠 Practical: stable subset that round-trips well for programmatic generation and edits."),
+			b.Textln("🛑 Cancellable: both lexer and parsers respect context cancel/timeout."),
+			b.Textln("🔧 Tooling-friendly: an optional tokenize → parse pipeline with positions for editors/linters."),
+		),
+		b.NL(),
+	}
+}
+
+func featureSetSection() []*gomd.Element {
+	b := gomd.Builder{}
+	return []*gomd.Element{
+		b.H2("Feature set"),
+		b.NL(),
+		b.UL(
+			b.Bold("Builder API"), b.Textln(" — headings (H1–H6), text, bold, italic, code spans, images, links, rules, lists (UL/OL), block quotes, fenced code blocks."),
+			b.Bold("Compounder API"), b.Textln(" — ergonomic helpers for common sections and titled lists (e.g., Section2, UL3, OL2) that compose cleanly."),
+			b.Bold("Render quality"), b.Textln(" — newline collapsing, whitespace trimming, predictable list prefixes/indentation."),
+			b.Bold("Two parse routes"), b.Textln(" — (1) fast one-pass parser; (2) tokenize → parse pipeline with token positions."),
+			b.Bold("Context support"), b.Textln(" — TokenizeCtx / ParseTokensCtx / ParseCtx honor cancellation and timeouts."),
+			b.Bold("Round-trip"), b.Textln(" — builder ⇄ parser tests ensure stable text output for the supported subset."),
+			b.Bold("Fuzz & benches"), b.Textln(" — fuzz tests for lexer round-trip; benchmarks for parsers and end-to-end build."),
+			b.Bold("File I/O"), b.Textln(" — tiny helpers: Read(file), Write(file, text)."),
+			b.Bold("Thread-friendly builder"), b.Textln(" — Builder is now pure/stateless (no internal buffers)."),
+		),
+		b.NL(),
+	}
+}
+
 func benchmarksSection() []*gomd.Element {
 	b := gomd.Builder{}
 	return []*gomd.Element{
@@ -45,6 +92,8 @@ func benchmarksSection() []*gomd.Element {
 		),
 		b.NL(),
 		b.Italicln("Takeaway: old parser is ~3x faster and ~6–7x lower memory on large docs; gap is even bigger on tiny docs."),
+		b.NL(),
+		b.Italicln("Note: numbers vary by Go version/CPU; these are for relative shape, not absolute truth."),
 	}
 }
 
@@ -54,7 +103,7 @@ func parsingUsageSection() []*gomd.Element {
 		b.H2("Parsing: fast vs pipeline"),
 		b.NL(),
 		b.Textln("gomd supports two parse paths:"),
-		// bullet 1
+		// bullets
 		b.UL(
 			b.Bold("Fast one-pass parser"),
 			b.Text(" → "),
@@ -64,7 +113,6 @@ func parsingUsageSection() []*gomd.Element {
 			b.Text(") — best when you just need "),
 			b.Codeln("[]*Element"),
 
-			// bullet 2
 			b.Bold("Pipeline"),
 			b.Text(" → "),
 			b.Code("TokenizeCtx"),
@@ -80,11 +128,11 @@ func parsingUsageSection() []*gomd.Element {
 			"p := gomd.NewParser()\n"+
 				"b := gomd.Builder{}\n\n"+
 				"ctx := context.Background()\n"+
-				"els, err := p.ParseCtx(ctx, src, \"\")\n"+
+				"els, err := p.ParseCtx(ctx, src)\n"+
 				"if err != nil { /* handle */ }\n\n"+
 				"md := gomd.Builder{}.Build(els...)\n\n"+
 				"// non-context:\n"+
-				"els2 := p.Parse(src, \"\")\n"+
+				"els2 := p.Parse(src)\n"+
 				"md2  := b.Build(els2...)",
 		),
 		b.NL(),
@@ -123,6 +171,23 @@ func whyTokensSection() []*gomd.Element {
 	}
 }
 
+func compatibilitySection() []*gomd.Element {
+	b := gomd.Builder{}
+	return []*gomd.Element{
+		b.H2("Compatibility & limitations"),
+		b.NL(),
+		b.UL(
+			b.Textln("Not full CommonMark — this is a pragmatic subset tuned for round-tripping."),
+			b.Textln("Ordered-list markers: one-pass and pipeline aim for parity; multi-digit and \")\"/\".\" styles supported in the pipeline; one-pass focuses on the common case."),
+			b.Textln("Deep list nesting: partial support (tracked in tests/roadmap)."),
+			b.Textln("Horizontal rules: recognized as lines of dashes/spaces with ≥3 dashes."),
+			b.Textln("Escaping: inline emphasis/code/link text/url escaping is pragmatic; edge cases may differ from strict CommonMark."),
+		),
+		b.NL(),
+		b.Italicln("If you hit an edge case, please open an issue with a minimal repro."),
+	}
+}
+
 func contributingSection() []*gomd.Element {
 	b := gomd.Builder{}
 	return []*gomd.Element{
@@ -138,6 +203,40 @@ func contributingSection() []*gomd.Element {
 		),
 		b.NL(),
 		b.Textln("Open an issue to discuss bigger changes (block elements, CommonMark edges, etc.)."),
+	}
+}
+
+var licenseMIT = `MIT License
+
+Copyright (c) 2025 Author
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.`
+
+func licenseSection() []*gomd.Element {
+	b := gomd.Builder{}
+	return []*gomd.Element{
+		b.H2("License"),
+		b.NL(),
+		b.Textln("Licensed under the MIT License (full text below)."),
+		b.NL(),
+		b.CodeFence("text", licenseMIT),
+		b.NL(),
 	}
 }
 
@@ -175,8 +274,7 @@ func main() {
 	template = append(template, body...)
 
 	md := b.Build(template...)
-	err := gomd.Write("my-company.md", md)
-	if err != nil {
+	if err := gomd.Write("my-company.md", md); err != nil {
 		// handle error
 	}
 }`
@@ -201,8 +299,7 @@ func main() {
 			c.UL2("Highlights", []string{"Ops", "Finance", "Eng"}),
 		)...,
 	)
-	err := gomd.Write("report.md", doc)
-	if err != nil {
+	if err := gomd.Write("report.md", doc); err != nil {
 		// handle error
 	}
 }`
@@ -247,8 +344,7 @@ func main() {
 		)...,
 	)
 
-	err := gomd.Write("my-company.md", md)
-	if err != nil {
+	if err := gomd.Write("my-company.md", md); err != nil {
 		// handle error
 	}
 }`
@@ -284,11 +380,48 @@ func main() {
 		)...,
 	)
 
-	err := gomd.Write("my-company.md", md)
-	if err != nil {
+	if err := gomd.Write("my-company.md", md); err != nil {
 		// handle error
 	}
 }`
+
+func usageSection(b gomd.Builder, c gomd.Compounder) []*gomd.Element {
+	return c.Compound(
+		c.Section2("Usage", []string{
+			"There are two main ways to build markdown. The Compounder is ergonomic for simple docs; the Builder gives you full control.",
+			"This README itself is produced with gomd.Compounder.",
+		}),
+		[]*gomd.Element{
+			b.H3("Builder Example"),
+			b.CodeFence("go", builderExample),
+			b.NL(),
+			b.H3("Compounder Example"),
+			b.CodeFence("go", compounderExample),
+			b.NL(),
+		},
+	)
+}
+
+func mixAndMatchSections(b gomd.Builder, c gomd.Compounder) []*gomd.Element {
+	return c.Compound(
+		c.Section2("Builder Mix & match templates", []string{
+			"You can compose reusable templates (headers, footers, TOCs) and spread them directly into a Build(...) call.",
+			"This enables programmatic generation & updates at scale (think 1,000+ docs).",
+		}),
+		[]*gomd.Element{
+			b.CodeFence("go", builderMixAndMatchExample),
+			b.NL(),
+		},
+		c.Section2("Compounder Mix & match templates", []string{
+			"You can compose reusable templates (headers, footers, TOCs) and pass them to Compound(...) along with other sections.",
+			"Compounder will flatten groups for you.",
+		}),
+		[]*gomd.Element{
+			b.CodeFence("go", compounderMixAndMatchExample),
+			b.NL(),
+		},
+	)
+}
 
 func main() {
 	b := gomd.Builder{}
@@ -305,6 +438,9 @@ func main() {
 				"Markdown has a loose grammar with lots of edge cases. gomd focuses on a pragmatic subset that’s stable and easy to round-trip.",
 				"This project is a WIP; early versions may have breaking changes.",
 			}),
+			whyThisExistsSection(),
+
+			installSection(),
 
 			// Two parsing routes (high-level, plain text)
 			c.Section2("Two parsing routes", []string{
@@ -312,47 +448,16 @@ func main() {
 				"1) Fast one-pass parser → ParseCtx (or Parse for back-compat). Best when you just need []*Element.",
 				"2) Pipeline → TokenizeCtx → ParseTokensCtx. Heavier, but exposes tokens for tooling.",
 			}),
-
-			// Practical usage with code fences, and token rationale
 			parsingUsageSection(),
 			whyTokensSection(),
 
-			// Usage (Builder + Compounder) + real code fences
-			c.Section2("Usage", []string{
-				"There are two main ways to build markdown. The Compounder is ergonomic for simple docs; the Builder gives you full control.",
-				"This README itself is produced with gomd.Compounder.",
-			}),
-			[]*gomd.Element{
-				b.H3("Builder Example"),
-				b.CodeFence("go", builderExample),
-				b.NL(),
-				b.H3("Compounder Example"),
-				b.CodeFence("go", compounderExample),
-				b.NL(),
-			},
+			featureSetSection(),
+			compatibilitySection(),
+			usageSection(b, c),
+			mixAndMatchSections(b, c),
 
-			// Builder mix & match templates, rendered with CodeFence
-			c.Section2("Builder Mix & match templates", []string{
-				"You can compose reusable templates (headers, footers, TOCs) and spread them directly into a Build(...) call.",
-				"This enables programmatic generation & updates at scale (think 1,000+ docs).",
-			}),
-			[]*gomd.Element{
-				b.CodeFence("go", builderMixAndMatchExample),
-				b.NL(),
-			},
-
-			// Compounder mix & match templates, rendered with CodeFence
-			c.Section2("Compounder Mix & match templates", []string{
-				"You can compose reusable templates (headers, footers, TOCs) and pass them to Compound(...) along with other sections.",
-				"Compounder will flatten groups for you.",
-			}),
-			[]*gomd.Element{
-				b.CodeFence("go", compounderMixAndMatchExample),
-				b.NL(),
-			},
-
-			// Features checklist
-			c.UL2("Features", []string{
+			// Features checklist (kept as a quick glance summary)
+			c.UL2("At a glance", []string{
 				"markdown builder ✅",
 				"markdown compounder ✅",
 				"Read and Write markdown ✅",
@@ -377,7 +482,10 @@ func main() {
 						"go test ./pkg/gomd/... | ./pkg/bin/colorize\n\n"+
 						"# run benches\n"+
 						"go test -bench=. -benchmem -run '^$' ./pkg/gomd/..."),
+				b.NL(),
 			},
+
+			licenseSection(),
 		)...,
 	)
 
