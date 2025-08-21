@@ -62,7 +62,7 @@ func exampleUsage() {
 	BuildExample("build-example.md")
 	CompoundExample("compound-example.md")
 	BuilderMixExample("builder-mix-example.md")
-	CompoundMixEample("compound-mix-example.md")
+	CompoundMixExample("compound-mix-example.md")
 }
 
 func BuildExample(filename string) {
@@ -154,7 +154,7 @@ func BuilderMixExample(filename string) {
 	}
 }
 
-func CompoundMixEample(filename string) {
+func CompoundMixExample(filename string) {
 	comp := "My Company"
 	b := gomd.Builder{}
 	c := gomd.Compounder{Builder: b}
