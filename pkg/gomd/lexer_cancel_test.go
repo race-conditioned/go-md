@@ -26,10 +26,11 @@ func (sr *slowReader) Read(p []byte) (int, error) {
 }
 
 func TestTokenizeCtx_Canceled_Immediate(t *testing.T) {
+	l := NewLexer()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel before starting
 
-	_, err := TokenizeCtx(ctx, strings.NewReader(strings.Repeat("hello\n", 1000)))
+	_, err := l.TokenizeCtx(ctx, strings.NewReader(strings.Repeat("hello\n", 1000)))
 	if err == nil {
 		t.Fatalf("expected cancellation error, got nil")
 	}
@@ -39,6 +40,7 @@ func TestTokenizeCtx_Canceled_Immediate(t *testing.T) {
 }
 
 func TestTokenizeCtx_Canceled_Midway(t *testing.T) {
+	l := NewLexer()
 	// Long-ish input + slow reader so we can cancel in-flight.
 	input := strings.Repeat("line with some text\n", 2000)
 
@@ -50,7 +52,7 @@ func TestTokenizeCtx_Canceled_Midway(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := TokenizeCtx(ctx, &slowReader{s: input, delay: 50 * time.Microsecond})
+	_, err := l.TokenizeCtx(ctx, &slowReader{s: input, delay: 50 * time.Microsecond})
 	if err == nil {
 		t.Fatalf("expected cancellation error, got nil")
 	}
@@ -61,20 +63,22 @@ func TestTokenizeCtx_Canceled_Midway(t *testing.T) {
 }
 
 func TestTokenizeCtx_Timeout_Immediate(t *testing.T) {
+	l := NewLexer()
 	ctx, cancel := context.WithTimeout(context.Background(), 0) // already expired
 	defer cancel()
-	_, err := TokenizeCtx(ctx, strings.NewReader(strings.Repeat("x\n", 1000)))
+	_, err := l.TokenizeCtx(ctx, strings.NewReader(strings.Repeat("x\n", 1000)))
 	if err != context.DeadlineExceeded {
 		t.Fatalf("want DeadlineExceeded, got %v", err)
 	}
 }
 
 func TestTokenizeCtx_Timeout_Midway(t *testing.T) {
+	l := NewLexer()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Millisecond)
 	defer cancel()
 
 	input := strings.Repeat("line with some text\n", 2000)
-	_, err := TokenizeCtx(ctx, &slowReader{s: input, delay: 50 * time.Microsecond})
+	_, err := l.TokenizeCtx(ctx, &slowReader{s: input, delay: 50 * time.Microsecond})
 	if err != context.DeadlineExceeded {
 		t.Fatalf("want DeadlineExceeded, got %v", err)
 	}

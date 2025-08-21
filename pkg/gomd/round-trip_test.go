@@ -9,8 +9,10 @@ import (
 )
 
 func TestRoundTrip(t *testing.T) {
-	b := Builder{}
-	p := NewParser()
+	b := NewBuilder()
+	p := NewOnePassParser()
+	l := NewLexer()
+	tp := NewTokenParser()
 
 	cases := []struct {
 		name string
@@ -110,19 +112,19 @@ func TestRoundTrip(t *testing.T) {
 			orig := string(origBytes)
 
 			// Route A: OneShotParser -> elements -> Build
-			elementsA := p.Parse(orig)
-			gotA := b.Build(elementsA...)
+			docA := p.Parse(orig)
+			gotA := b.Build(docA.Elements...)
 
 			// Route B: Tokenize -> ParseTokens -> elements -> Build
-			toks, err := Tokenize(strings.NewReader(orig))
+			toks, err := l.Tokenize(strings.NewReader(orig))
 			if err != nil {
 				t.Fatalf("Tokenize error: %v", err)
 			}
-			doc, err := ParseTokens(toks)
+			docB, err := tp.ParseTokens(toks)
 			if err != nil {
 				t.Fatalf("ParseTokens error: %v", err)
 			}
-			gotB := b.Build(doc.Children...)
+			gotB := b.Build(docB.Elements...)
 
 			// 1) Both routes should render identically
 			if diff := cmp.Diff(gotA, gotB, opts...); diff != "" {

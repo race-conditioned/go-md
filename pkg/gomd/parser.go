@@ -5,35 +5,8 @@ import (
 	"strings"
 )
 
-// Parser is a 'one-step' Markdown parser that converts Markdown text into a slice of Elements.
-type Parser struct {
-	text        string
-	elements    []*Element
-	leafNode    *[]*Element
-	parentStack []*Element
-	lineCtx     variableLineCtx
-	ctx         context.Context
-	err         error
-}
-
-// NewParser creates a new Parser instance with initialized fields.
-func NewParser() *Parser {
-	return &Parser{
-		elements:    []*Element{},
-		leafNode:    &[]*Element{},
-		parentStack: []*Element{},
-		lineCtx: variableLineCtx{
-			basePointer:      0,
-			lookAheadPointer: 0,
-			specialChars:     []IndexChar{},
-			ruleString:       "!*`[()]_",
-			cache:            []byte{},
-		},
-	}
-}
-
-// reset clears the Parser's state, allowing it to be reused for a new parse operation.
-func (p *Parser) reset() {
+// reset clears the OnePassParser's state, allowing it to be reused for a new parse operation.
+func (p *OnePassParser) reset() {
 	p.text = ""
 	p.elements = []*Element{}
 	p.leafNode = &p.elements
@@ -41,27 +14,11 @@ func (p *Parser) reset() {
 	p.err = nil
 }
 
-// variableLineCtx holds the context for parsing a single line of Markdown text.
-type variableLineCtx struct {
-	basePointer      int
-	lookAheadPointer int
-	specialChars     []IndexChar
-	ruleString       string
-	cache            []byte
-}
-
-// indexChar is a helper struct to hold the index and character of special characters in the line.
-// using this shortcuts seeking the next special character
-type IndexChar struct {
-	i int
-	c rune
-}
-
 // reset resets the variableLineCtx to its initial state, clearing pointers and caches.
 func (ctx *variableLineCtx) reset() {
 	ctx.basePointer = 0
 	ctx.lookAheadPointer = 0
-	ctx.specialChars = []IndexChar{}
+	ctx.specialChars = []indexChar{}
 	ctx.cache = []byte{}
 }
 
@@ -78,7 +35,7 @@ func (ctx *variableLineCtx) seek(r rune) (found bool) {
 }
 
 // canceled checks if the context has been canceled or has an error.
-func (p *Parser) canceled() bool {
+func (p *OnePassParser) canceled() bool {
 	if p.ctx == nil {
 		return false
 	}
@@ -90,26 +47,26 @@ func (p *Parser) canceled() bool {
 }
 
 // appendElement adds the element pointer to the leaf node
-func (p *Parser) appendElement(e *Element) {
+func (p *OnePassParser) appendElement(e *Element) {
 	*p.leafNode = append(*p.leafNode, e)
 }
 
 // flushCtxCache checks if there is any cached text in the lineCtx and appends it as a text Element.
-func (p *Parser) flushCtxCache() {
+func (p *OnePassParser) flushCtxCache() {
 	if len(p.lineCtx.cache) != 0 {
-		p.appendElement(&Element{Kind: KText, Text: string(p.lineCtx.cache)})
+		p.appendElement(&Element{Kind: EKText, Text: string(p.lineCtx.cache)})
 		p.lineCtx.cache = []byte{}
 	}
 }
 
 // Parse parses the provided Markdown string and returns a slice of Elements.
-func (p *Parser) Parse(md string) []*Element {
-	elements, _ := p.ParseCtx(context.Background(), md)
-	return elements
+func (p *OnePassParser) Parse(md string) *Document {
+	document, _ := p.ParseCtx(context.Background(), md)
+	return document
 }
 
 // ParseCtx parses the provided Markdown string in the context of the provided context.Context.
-func (p *Parser) ParseCtx(ctx context.Context, md string) ([]*Element, error) {
+func (p *OnePassParser) ParseCtx(ctx context.Context, md string) (*Document, error) {
 	p.ctx = ctx
 	p.reset()
 	lines := strings.Split(md, "\n")
@@ -127,7 +84,7 @@ func (p *Parser) ParseCtx(ctx context.Context, md string) ([]*Element, error) {
 				continue
 			}
 
-			p.appendElement(&Element{Kind: KNewLine, LineBreak: true})
+			p.appendElement(&Element{Kind: EKNewLine, LineBreak: true})
 		}
 
 		// we allow for switching between the elements and Children slices
@@ -147,11 +104,11 @@ func (p *Parser) ParseCtx(ctx context.Context, md string) ([]*Element, error) {
 		}
 	}
 
-	return p.elements, nil
+	return &Document{Elements: p.elements}, nil
 }
 
 // identifyListedItem checks if the current line starts with a list item marker (either unordered or ordered).
-func (p *Parser) identifyListedItem() (bool, int, ListType) {
+func (p *OnePassParser) identifyListedItem() (bool, int, ListType) {
 	trimmed := strings.TrimLeft(p.text, " \t")
 	listType := ListNone
 
@@ -193,13 +150,13 @@ func (p *Parser) identifyListedItem() (bool, int, ListType) {
 }
 
 // handleListItem processes a list item based on its type and nesting level.
-func (p *Parser) handleListItem(listType ListType, nestCount int, generation int) int {
+func (p *OnePassParser) handleListItem(listType ListType, nestCount int, generation int) int {
 	if nestCount < generation {
 		var targetParent *Element
 		var rootParent *Element
 		// create as many parents as required and link them in lineage order, and keep a pointer to the root parent
 		for i := 0; i < generation-nestCount; i++ {
-			parent := &Element{Kind: KList, ListKind: listType, Children: []*Element{}}
+			parent := &Element{Kind: EKList, ListKind: listType, Children: []*Element{}}
 			if i == 0 {
 				rootParent = parent
 			} else {
@@ -235,7 +192,7 @@ func (p *Parser) handleListItem(listType ListType, nestCount int, generation int
 // it returns true and appends the Element pointer to the dereferenced *[]*Element slice if it identifies a valid header.
 // it returns false and does nothing if no valid header is found.
 // it identifies the header type based on the hash count
-func (p *Parser) processHeader() bool {
+func (p *OnePassParser) processHeader() bool {
 	if !strings.HasPrefix(p.text, "#") {
 		return false
 	}
@@ -256,13 +213,13 @@ func (p *Parser) processHeader() bool {
 	}
 
 	if isHeader {
-		p.appendElement(&Element{Kind: KHeading, Level: level, LineBreak: true, Text: strings.TrimRight(p.text[level+1:], " ")})
+		p.appendElement(&Element{Kind: EKHeading, Level: level, LineBreak: true, Text: strings.TrimRight(p.text[level+1:], " ")})
 	}
 	return isHeader
 }
 
 // processHorizontalRule checks if the line starts with "---" and contains only valid characters.
-func (p *Parser) processHorizontalRule(index *int) bool {
+func (p *OnePassParser) processHorizontalRule(index *int) bool {
 	if !strings.HasPrefix(p.text, "---") {
 		return false
 	}
@@ -275,18 +232,18 @@ func (p *Parser) processHorizontalRule(index *int) bool {
 	})
 
 	if !invalidChar {
-		p.appendElement(&Element{Kind: KRule, LineBreak: true, Text: "\n" + p.text + "\n"})
+		p.appendElement(&Element{Kind: EKRule, LineBreak: true, Text: "\n" + p.text + "\n"})
 		*index = *index + 1
 	}
 	return !invalidChar
 }
 
 // processVariableLine processes a line of text for Markdown syntax elements such as bold, italic, links, images, and code spans.
-func (p *Parser) processVariableLine() bool {
+func (p *OnePassParser) processVariableLine() bool {
 	p.lineCtx.reset()
 	for i, r := range p.text {
 		if strings.Contains(p.lineCtx.ruleString, string(r)) {
-			p.lineCtx.specialChars = append(p.lineCtx.specialChars, IndexChar{i: i, c: r})
+			p.lineCtx.specialChars = append(p.lineCtx.specialChars, indexChar{i: i, c: r})
 		}
 	}
 
@@ -318,14 +275,14 @@ func (p *Parser) processVariableLine() bool {
 		if len(p.text) > 0 {
 			last = string(p.text[len(p.text)-1])
 		}
-		p.appendElement(&Element{Kind: KText, LineBreak: true, Text: string(p.lineCtx.cache) + last})
+		p.appendElement(&Element{Kind: EKText, LineBreak: true, Text: string(p.lineCtx.cache) + last})
 	}
 
 	return false
 }
 
 // handleBold processes bold text enclosed in double asterisks "**...**".
-func (p *Parser) handleBold(ctx *variableLineCtx) {
+func (p *OnePassParser) handleBold(ctx *variableLineCtx) {
 	if p.err != nil {
 		return
 	}
@@ -345,13 +302,13 @@ func (p *Parser) handleBold(ctx *variableLineCtx) {
 	p.flushCtxCache()
 	// if there are no more chars then we use the ln version
 	if ctx.lookAheadPointer+1 == len(p.text)-1 {
-		p.appendElement(&Element{Kind: KBold, LineBreak: true, Text: inlineWrap("**", boldText)})
+		p.appendElement(&Element{Kind: EKBold, LineBreak: true, Text: inlineWrap("**", boldText)})
 	} else {
-		p.appendElement(&Element{Kind: KBold, Text: inlineWrap("**", boldText)})
+		p.appendElement(&Element{Kind: EKBold, Text: inlineWrap("**", boldText)})
 	}
 
 	// remove the further double * from specialChars
-	newSpecialChars := []IndexChar{}
+	newSpecialChars := []indexChar{}
 	count := 0
 	for i, specialChar := range ctx.specialChars {
 		if count == 2 {
@@ -372,7 +329,7 @@ func (p *Parser) handleBold(ctx *variableLineCtx) {
 }
 
 // handleItalic processes italic text enclosed in single underscores "_..._".
-func (p *Parser) handleItalic(ctx *variableLineCtx) {
+func (p *OnePassParser) handleItalic(ctx *variableLineCtx) {
 	if p.err != nil {
 		return
 	}
@@ -389,13 +346,13 @@ func (p *Parser) handleItalic(ctx *variableLineCtx) {
 	p.flushCtxCache()
 	// if there are no more chars we use the ln version
 	if ctx.lookAheadPointer == len(p.text)-1 {
-		p.appendElement(&Element{Kind: KItalic, LineBreak: true, Text: inlineWrap("_", italicText)})
+		p.appendElement(&Element{Kind: EKItalic, LineBreak: true, Text: inlineWrap("_", italicText)})
 	} else {
-		p.appendElement(&Element{Kind: KItalic, Text: inlineWrap("_", italicText)})
+		p.appendElement(&Element{Kind: EKItalic, Text: inlineWrap("_", italicText)})
 	}
 
 	// let's remove special chars that are no more of use to us
-	newSpecialChars := []IndexChar{}
+	newSpecialChars := []indexChar{}
 	count := 0
 	for i, specialChar := range ctx.specialChars {
 		if count == 1 {
@@ -415,7 +372,7 @@ func (p *Parser) handleItalic(ctx *variableLineCtx) {
 }
 
 // handleItalic processes italic text enclosed in single underscores "_..._".
-func (p *Parser) handleLink(ctx *variableLineCtx) {
+func (p *OnePassParser) handleLink(ctx *variableLineCtx) {
 	if p.err != nil {
 		return
 	}
@@ -460,12 +417,12 @@ func (p *Parser) handleLink(ctx *variableLineCtx) {
 	p.flushCtxCache()
 	// if there are no more chars we use the ln version
 	if ctx.lookAheadPointer == len(p.text)-1 {
-		p.appendElement(&Element{Kind: KLink, LineBreak: true, Text: display, Href: link})
+		p.appendElement(&Element{Kind: EKLink, LineBreak: true, Text: display, Href: link})
 	} else {
-		p.appendElement(&Element{Kind: KLink, Text: display, Href: link})
+		p.appendElement(&Element{Kind: EKLink, Text: display, Href: link})
 	}
 	// let's clear out the special chars that are of no use to us
-	newSpecialChars := []IndexChar{}
+	newSpecialChars := []indexChar{}
 	count := 0
 	foundClosingSquare := false
 	for i, specialChar := range ctx.specialChars {
@@ -487,7 +444,7 @@ func (p *Parser) handleLink(ctx *variableLineCtx) {
 }
 
 // handleImage processes images in Markdown syntax, which are similar to links but start with an exclamation mark.
-func (p *Parser) handleImage(ctx *variableLineCtx) {
+func (p *OnePassParser) handleImage(ctx *variableLineCtx) {
 	if p.err != nil {
 		return
 	}
@@ -539,10 +496,10 @@ func (p *Parser) handleImage(ctx *variableLineCtx) {
 	// flush the cache to a text element
 	p.flushCtxCache()
 	// images are always "ln"
-	p.appendElement(&Element{Kind: KImage, LineBreak: true, Alt: alt, Href: href})
+	p.appendElement(&Element{Kind: EKImage, LineBreak: true, Alt: alt, Href: href})
 
 	// now get rid of the special chars that are of no use to us
-	newSpecialChars := []IndexChar{}
+	newSpecialChars := []indexChar{}
 	count := 0
 	foundClosingSquare := false
 	for i, specialChar := range ctx.specialChars {
@@ -565,7 +522,7 @@ func (p *Parser) handleImage(ctx *variableLineCtx) {
 }
 
 // handleCode processes inline code spans enclosed in backticks "`...`".
-func (p *Parser) handleCode(ctx *variableLineCtx) {
+func (p *OnePassParser) handleCode(ctx *variableLineCtx) {
 	if p.err != nil {
 		return
 	}
@@ -582,13 +539,13 @@ func (p *Parser) handleCode(ctx *variableLineCtx) {
 	p.flushCtxCache()
 	// if there are no more chars we create an ln element
 	if ctx.lookAheadPointer == len(p.text)-1 {
-		p.appendElement(&Element{Kind: KCodeSpan, LineBreak: true, Text: "`" + codeText + "`"})
+		p.appendElement(&Element{Kind: EKCodeSpan, LineBreak: true, Text: "`" + codeText + "`"})
 	} else {
-		p.appendElement(&Element{Kind: KCodeSpan, Text: "`" + codeText + "`"})
+		p.appendElement(&Element{Kind: EKCodeSpan, Text: "`" + codeText + "`"})
 	}
 
 	// let's get rid of the specialChars that are of no use to us
-	newSpecialChars := []IndexChar{}
+	newSpecialChars := []indexChar{}
 	count := 0
 	for i, specialChar := range ctx.specialChars {
 		if count == 1 {

@@ -20,7 +20,9 @@ func makeManyTokens(lines int) []Token {
 }
 
 func TestParseTokensCtx_Canceled_Immediate(t *testing.T) {
-	toks, err := Tokenize(strings.NewReader(strings.Repeat("a b\n", 100)))
+	l := NewLexer()
+	tp := NewTokenParser()
+	toks, err := l.Tokenize(strings.NewReader(strings.Repeat("a b\n", 100)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +30,7 @@ func TestParseTokensCtx_Canceled_Immediate(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err = ParseTokensCtx(ctx, toks)
+	_, err = tp.ParseTokensCtx(ctx, toks)
 	if err == nil {
 		t.Fatalf("expected cancellation error, got nil")
 	}
@@ -38,6 +40,7 @@ func TestParseTokensCtx_Canceled_Immediate(t *testing.T) {
 }
 
 func TestParseTokensCtx_Canceled_Midway(t *testing.T) {
+	tp := NewTokenParser()
 	toks := makeManyTokens(50000)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -48,7 +51,7 @@ func TestParseTokensCtx_Canceled_Midway(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := ParseTokensCtx(ctx, toks)
+	_, err := tp.ParseTokensCtx(ctx, toks)
 	if err == nil {
 		t.Fatalf("expected cancellation error, got nil")
 	}
@@ -58,7 +61,9 @@ func TestParseTokensCtx_Canceled_Midway(t *testing.T) {
 }
 
 func TestParseTokensCtx_Timeout_Immediate(t *testing.T) {
-	toks, err := Tokenize(strings.NewReader("a b\na b\n"))
+	l := NewLexer()
+	tp := NewTokenParser()
+	toks, err := l.Tokenize(strings.NewReader("a b\na b\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,19 +71,20 @@ func TestParseTokensCtx_Timeout_Immediate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
 
-	_, err = ParseTokensCtx(ctx, toks)
+	_, err = tp.ParseTokensCtx(ctx, toks)
 	if err != context.DeadlineExceeded {
 		t.Fatalf("want DeadlineExceeded, got %v", err)
 	}
 }
 
 func TestParseTokensCtx_Timeout_Midway(t *testing.T) {
+	tp := NewTokenParser()
 	toks := makeManyTokens(50000)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Millisecond)
 	defer cancel()
 
-	_, err := ParseTokensCtx(ctx, toks)
+	_, err := tp.ParseTokensCtx(ctx, toks)
 	if err != context.DeadlineExceeded {
 		t.Fatalf("want DeadlineExceeded, got %v", err)
 	}

@@ -46,7 +46,7 @@ func dataset(t *testing.B) map[string]string {
 }
 
 func BenchmarkOldParser_Parse(b *testing.B) {
-	p := NewParser()
+	p := NewOnePassParser()
 	for name, in := range dataset(b) {
 		in := in // capture
 		b.Run(name, func(b *testing.B) {
@@ -54,7 +54,8 @@ func BenchmarkOldParser_Parse(b *testing.B) {
 			b.SetBytes(int64(len(in)))
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				sinkElems = p.Parse(in)
+				doc := p.Parse(in)
+				sinkElems = doc.Elements
 				if len(sinkElems) == 0 && len(in) > 0 {
 					b.Fatalf("empty result")
 				}
@@ -64,6 +65,8 @@ func BenchmarkOldParser_Parse(b *testing.B) {
 }
 
 func BenchmarkPipeline_TokenizePlusParse(b *testing.B) {
+	l := NewLexer()
+	tp := NewTokenParser()
 	for name, in := range dataset(b) {
 		in := in
 		b.Run(name, func(b *testing.B) {
@@ -71,16 +74,16 @@ func BenchmarkPipeline_TokenizePlusParse(b *testing.B) {
 			b.SetBytes(int64(len(in)))
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				toks, err := Tokenize(strings.NewReader(in))
+				toks, err := l.Tokenize(strings.NewReader(in))
 				if err != nil {
 					b.Fatal(err)
 				}
-				doc, err := ParseTokens(toks)
+				doc, err := tp.ParseTokens(toks)
 				if err != nil {
 					b.Fatal(err)
 				}
 				sinkDoc = doc
-				if sinkDoc == nil || len(doc.Children) == 0 && len(in) > 0 {
+				if sinkDoc == nil || len(doc.Elements) == 0 && len(in) > 0 {
 					b.Fatalf("empty doc")
 				}
 			}
@@ -89,6 +92,7 @@ func BenchmarkPipeline_TokenizePlusParse(b *testing.B) {
 }
 
 func BenchmarkTokenize_Only(b *testing.B) {
+	l := NewLexer()
 	for name, in := range dataset(b) {
 		in := in
 		b.Run(name, func(b *testing.B) {
@@ -96,7 +100,7 @@ func BenchmarkTokenize_Only(b *testing.B) {
 			b.SetBytes(int64(len(in)))
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				toks, err := Tokenize(strings.NewReader(in))
+				toks, err := l.Tokenize(strings.NewReader(in))
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -107,10 +111,12 @@ func BenchmarkTokenize_Only(b *testing.B) {
 }
 
 func BenchmarkParseTokens_Only(b *testing.B) {
+	l := NewLexer()
+	tp := NewTokenParser()
 	for name, in := range dataset(b) {
 		in := in
 		// Pre-tokenize once outside the timed region.
-		toks, err := Tokenize(strings.NewReader(in))
+		toks, err := l.Tokenize(strings.NewReader(in))
 		if err != nil {
 			b.Fatalf("pre-tokenize: %v", err)
 		}
@@ -119,7 +125,7 @@ func BenchmarkParseTokens_Only(b *testing.B) {
 			b.SetBytes(int64(len(in)))
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				doc, err := ParseTokens(toks)
+				doc, err := tp.ParseTokens(toks)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -130,8 +136,8 @@ func BenchmarkParseTokens_Only(b *testing.B) {
 }
 
 func BenchmarkEndToEnd_Build_OldParser(b *testing.B) {
-	bldr := Builder{}
-	p := NewParser()
+	bldr := NewBuilder()
+	p := NewOnePassParser()
 	for name, in := range dataset(b) {
 		in := in
 		b.Run(name, func(b *testing.B) {
@@ -139,8 +145,8 @@ func BenchmarkEndToEnd_Build_OldParser(b *testing.B) {
 			b.SetBytes(int64(len(in)))
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				elems := p.Parse(in)
-				sinkStr = bldr.Build(elems...)
+				doc := p.Parse(in)
+				sinkStr = bldr.Build(doc.Elements...)
 				if len(sinkStr) == 0 && len(in) > 0 {
 					b.Fatalf("empty render")
 				}
@@ -150,7 +156,9 @@ func BenchmarkEndToEnd_Build_OldParser(b *testing.B) {
 }
 
 func BenchmarkEndToEnd_Build_Pipeline(b *testing.B) {
-	bldr := Builder{}
+	l := NewLexer()
+	tp := NewTokenParser()
+	bldr := NewBuilder()
 	for name, in := range dataset(b) {
 		in := in
 		b.Run(name, func(b *testing.B) {
@@ -158,15 +166,15 @@ func BenchmarkEndToEnd_Build_Pipeline(b *testing.B) {
 			b.SetBytes(int64(len(in)))
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				toks, err := Tokenize(strings.NewReader(in))
+				toks, err := l.Tokenize(strings.NewReader(in))
 				if err != nil {
 					b.Fatal(err)
 				}
-				doc, err := ParseTokens(toks)
+				doc, err := tp.ParseTokens(toks)
 				if err != nil {
 					b.Fatal(err)
 				}
-				sinkStr = bldr.Build(doc.Children...)
+				sinkStr = bldr.Build(doc.Elements...)
 				if len(sinkStr) == 0 && len(in) > 0 {
 					b.Fatalf("empty render")
 				}

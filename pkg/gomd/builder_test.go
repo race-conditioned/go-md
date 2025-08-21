@@ -8,7 +8,7 @@ import (
 )
 
 func TestSimpleBuilderCases(t *testing.T) {
-	b := Builder{}
+	b := NewBuilder()
 
 	cases := []struct {
 		name string
@@ -109,8 +109,8 @@ func TestSimpleBuilderCases(t *testing.T) {
 }
 
 func TestCompoundCases(t *testing.T) {
-	b := Builder{}
-	c := Compounder{Builder: b}
+	b := NewBuilder()
+	c := NewCompounder(b)
 
 	comp := "langfire"
 	footer := footer(comp)

@@ -92,21 +92,21 @@ func (ctx *renderCtx) renderText(b *Builder, buf *strings.Builder, el *Element) 
 	}
 
 	switch el.Kind {
-	case KHeading:
+	case EKHeading:
 		ctx.lineBuffer.WriteString(strings.Repeat("#", el.Level) + " " + el.Text)
-	case KList:
+	case EKList:
 		ctx.pushFrame(el.ListKind)
 		defer ctx.popFrame()
-	case KCodeBlock:
+	case EKCodeBlock:
 		ctx.lineBuffer.WriteString(fmt.Sprintf("```%s\n%s\n\n```", el.Lang, el.Text))
-	case KQuote:
+	case EKQuote:
 		ctx.lineBuffer.WriteString("> ")
-	case KLink:
+	case EKLink:
 		ctx.lineBuffer.WriteString(fmt.Sprintf("[%s](%s)", el.Text, el.Href))
 		if !el.LineBreak {
 			ctx.lineBuffer.WriteString(" ")
 		}
-	case KImage:
+	case EKImage:
 		ctx.lineBuffer.WriteString(fmt.Sprintf("![%s](%s)", el.Alt, el.Href))
 	default:
 		ctx.lineBuffer.WriteString(el.Text)

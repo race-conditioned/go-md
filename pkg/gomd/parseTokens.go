@@ -6,12 +6,12 @@ import (
 )
 
 // Parser is a Markdown parser that converts lexed tokens into a slice of Elements in a Document.
-func ParseTokens(tks []Token) (*Document, error) {
-	return ParseTokensCtx(context.Background(), tks)
+func (tp *TokenParser) ParseTokens(tks []Token) (*Document, error) {
+	return tp.ParseTokensCtx(context.Background(), tks)
 }
 
 // ParseTokensCtx parses lexed tokens into a Document, respecting the context for cancellation or timeout.
-func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
+func (tp *TokenParser) ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 	var out []*Element
 
 	i := 0
@@ -28,7 +28,7 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 
 	for i < len(tks) {
 		if err := checkCtx(); err != nil {
-			return &Document{Children: out}, err
+			return &Document{Elements: out}, err
 		}
 		if tks[i].Kind == TEOF {
 			break
@@ -37,7 +37,7 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 		// preserve blank lines, newline at BOL means emit an empty line element.
 		if tks[i].Kind == TNewline {
 			if bol {
-				out = append(out, &Element{Kind: KText, Text: "", LineBreak: true})
+				out = append(out, &Element{Kind: EKText, Text: "", LineBreak: true})
 			}
 			bol = true
 			i++
@@ -50,7 +50,7 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 			if ok, next := isHorizontalRuleLine(tks, i); ok {
 				// close any open list
 				currentList = nil
-				out = append(out, &Element{Kind: KRule, Text: "\n---\n", LineBreak: true})
+				out = append(out, &Element{Kind: EKRule, Text: "\n---\n", LineBreak: true})
 				i = next // consume entire line (including its trailing newline if present)
 				bol = true
 				continue
@@ -63,7 +63,7 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 					level++
 					i++
 					if err := checkCtx(); err != nil {
-						return &Document{Children: out}, err
+						return &Document{Elements: out}, err
 					}
 				}
 				if level > 6 {
@@ -76,7 +76,7 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 					i++
 				}
 				out = append(out, &Element{
-					Kind:      KHeading,
+					Kind:      EKHeading,
 					Level:     level,
 					Text:      text,
 					LineBreak: true,
@@ -88,14 +88,14 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 			// ordered list item: OL marker at BOL
 			if tks[i].Kind == TOLMarker {
 				if currentList == nil || currentListKind != ListOrdered {
-					currentList = &Element{Kind: KList, ListKind: ListOrdered, Children: []*Element{}}
+					currentList = &Element{Kind: EKList, ListKind: ListOrdered, Children: []*Element{}}
 					out = append(out, currentList)
 					currentListKind = ListOrdered
 				}
 				i++                                                     // consume marker
 				elems, ni, err := parseInlineLineCtx(ctx, tks, i, true) // trim one leading space after marker
 				if err != nil {
-					return &Document{Children: out}, err
+					return &Document{Elements: out}, err
 				}
 				i = ni
 				currentList.Children = append(currentList.Children, elems...)
@@ -106,14 +106,14 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 			// unordered list item: '-' + space at BOL
 			if tks[i].Kind == TDash && i+1 < len(tks) && tks[i+1].Kind == TText && strings.HasPrefix(tks[i+1].Lexeme, " ") {
 				if currentList == nil || currentListKind != ListUnordered {
-					currentList = &Element{Kind: KList, ListKind: ListUnordered, Children: []*Element{}}
+					currentList = &Element{Kind: EKList, ListKind: ListUnordered, Children: []*Element{}}
 					out = append(out, currentList)
 					currentListKind = ListUnordered
 				}
 				i++                                                     // consume '-'
 				elems, ni, err := parseInlineLineCtx(ctx, tks, i, true) // drop a single leading space
 				if err != nil {
-					return &Document{Children: out}, err
+					return &Document{Elements: out}, err
 				}
 				i = ni
 				currentList.Children = append(currentList.Children, elems...)
@@ -127,7 +127,7 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 			// plain line
 			elems, ni, err := parseInlineLineCtx(ctx, tks, i, false)
 			if err != nil {
-				return &Document{Children: out}, err
+				return &Document{Elements: out}, err
 			}
 			i = ni
 			out = append(out, elems...)
@@ -138,14 +138,14 @@ func ParseTokensCtx(ctx context.Context, tks []Token) (*Document, error) {
 		// not at BOL (rare): treat as plain line until newline
 		elems, ni, err := parseInlineLineCtx(ctx, tks, i, false)
 		if err != nil {
-			return &Document{Children: out}, err
+			return &Document{Elements: out}, err
 		}
 		i = ni
 		out = append(out, elems...)
 		bol = true
 	}
 
-	return &Document{Children: out}, nil
+	return &Document{Elements: out}, nil
 }
 
 // collectUntilNewline collects tokens until a newline or EOF is encountered.
@@ -209,7 +209,7 @@ func parseInlineLineCtx(ctx context.Context, tks []Token, i int, trimLeadingSpac
 		if buf.Len() == 0 {
 			return
 		}
-		out = append(out, &Element{Kind: KText, Text: buf.String(), LineBreak: linebreak})
+		out = append(out, &Element{Kind: EKText, Text: buf.String(), LineBreak: linebreak})
 		buf.Reset()
 	}
 
@@ -240,7 +240,7 @@ loop:
 			if i+2 < len(tks) && tks[i+1].Kind == TText && tks[i+2].Kind == TBacktick {
 				flushText(false)
 				code := tks[i+1].Lexeme
-				out = append(out, &Element{Kind: KCodeSpan, Text: inlineWrap("`", escapeBackticks(code))})
+				out = append(out, &Element{Kind: EKCodeSpan, Text: inlineWrap("`", escapeBackticks(code))})
 				i += 3
 				first = false
 				lastWasLink = false
@@ -256,7 +256,7 @@ loop:
 			if i+4 < len(tks) && tks[i+1].Kind == TStar && tks[i+2].Kind == TText && tks[i+3].Kind == TStar && tks[i+4].Kind == TStar {
 				flushText(false)
 				inner := tks[i+2].Lexeme
-				out = append(out, &Element{Kind: KBold, Text: inlineWrap("**", escapeInline(inner))})
+				out = append(out, &Element{Kind: EKBold, Text: inlineWrap("**", escapeInline(inner))})
 				i += 5
 				first = false
 				lastWasLink = false
@@ -273,7 +273,7 @@ loop:
 			if i+2 < len(tks) && tks[i+1].Kind == TText && tks[i+2].Kind == TUnderscore {
 				flushText(false)
 				inner := tks[i+1].Lexeme
-				out = append(out, &Element{Kind: KItalic, Text: inlineWrap("_", escapeInline(inner))})
+				out = append(out, &Element{Kind: EKItalic, Text: inlineWrap("_", escapeInline(inner))})
 				i += 3
 				first = false
 				lastWasLink = false
@@ -296,7 +296,7 @@ loop:
 				flushText(false)
 				alt := tks[i+2].Lexeme
 				src := tks[i+5].Lexeme
-				out = append(out, &Element{Kind: KImage, Alt: alt, Href: escapeURL(src)})
+				out = append(out, &Element{Kind: EKImage, Alt: alt, Href: escapeURL(src)})
 				i += 7
 				first = false
 				lastWasLink = false
@@ -318,7 +318,7 @@ loop:
 				flushText(false)
 				text := escapeLinkText(tks[i+1].Lexeme)
 				href := escapeURL(tks[i+4].Lexeme)
-				out = append(out, &Element{Kind: KLink, Text: text, Href: href})
+				out = append(out, &Element{Kind: EKLink, Text: text, Href: href})
 				i += 6
 				first = false
 				lastWasLink = true
@@ -351,12 +351,12 @@ loop:
 
 	// empty line
 	if len(out) == 0 && buf.Len() == 0 {
-		out = append(out, &Element{Kind: KText, Text: "", LineBreak: true})
+		out = append(out, &Element{Kind: EKText, Text: "", LineBreak: true})
 		return out, i + btoi(i < len(tks) && tks[i].Kind == TNewline), nil
 	}
 
 	if buf.Len() > 0 {
-		out = append(out, &Element{Kind: KText, Text: buf.String()})
+		out = append(out, &Element{Kind: EKText, Text: buf.String()})
 	}
 	// mark only the last as a line break
 	out[len(out)-1].LineBreak = true

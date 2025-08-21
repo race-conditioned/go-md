@@ -56,6 +56,7 @@ func hasKind(toks []Token, k TokenKind) bool {
 }
 
 func TestTokenize_Table(t *testing.T) {
+	l := NewLexer()
 	tests := []struct {
 		name     string
 		in       string
@@ -192,7 +193,7 @@ func TestTokenize_Table(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := Tokenize(strings.NewReader(tc.in))
+			got, err := l.Tokenize(strings.NewReader(tc.in))
 			if err != nil {
 				t.Fatalf("Tokenize error: %v", err)
 			}
@@ -211,6 +212,7 @@ func TestTokenize_Table(t *testing.T) {
 
 // concatenating token lexemes (except TEOF) round-trips the source.
 func TestTokenize_RoundTripLexemes(t *testing.T) {
+	l := NewLexer()
 	cases := []string{
 		"",
 		"#", "# ", "# h", "# Hello *world*",
@@ -223,7 +225,7 @@ func TestTokenize_RoundTripLexemes(t *testing.T) {
 	}
 	for _, in := range cases {
 		t.Run(fmt.Sprintf("roundtrip_%q", in), func(t *testing.T) {
-			toks, err := Tokenize(strings.NewReader(in))
+			toks, err := l.Tokenize(strings.NewReader(in))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -236,6 +238,7 @@ func TestTokenize_RoundTripLexemes(t *testing.T) {
 
 // fuzz: checks round-trip for random strings.
 func FuzzTokenize_RoundTrip(f *testing.F) {
+	l := NewLexer()
 	seeds := []string{
 		"", "# title", "## x", "- a", "1) b", "2. c",
 		"![a](b)", "[x](y)", "`c`", "_i_", "*b*",
@@ -247,7 +250,7 @@ func FuzzTokenize_RoundTrip(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		toks, err := Tokenize(strings.NewReader(s))
+		toks, err := l.Tokenize(strings.NewReader(s))
 		if err != nil {
 			return
 		}

@@ -20,8 +20,8 @@ func normalize(e []*Element) []*Element {
 }
 
 func TestSimpleParseCases(t *testing.T) {
-	b := Builder{}
-	p := NewParser()
+	b := NewBuilder()
+	p := NewOnePassParser()
 	cases := []struct {
 		name string
 		path string
@@ -96,7 +96,7 @@ func TestSimpleParseCases(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := p.Parse(string(md))
-			if diff := cmp.Diff(normalize(tc.want), got, opts...); diff != "" {
+			if diff := cmp.Diff(&Document{Elements: normalize(tc.want)}, got, opts...); diff != "" {
 				t.Fatalf("Build mismatch (-want +got):\n%s", diff)
 			}
 		})

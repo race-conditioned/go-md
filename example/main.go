@@ -7,7 +7,7 @@ import (
 )
 
 func header(title string) []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.H1(title),
 		b.NL(),
@@ -15,7 +15,7 @@ func header(title string) []*gomd.Element {
 }
 
 func footer(comp string) []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.Rule(),
 		b.Textln(fmt.Sprintf("Copyright %s (c) 2025 Author. All Rights Reserved.", comp)),
@@ -23,7 +23,7 @@ func footer(comp string) []*gomd.Element {
 }
 
 func installSection() []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.H2("Install"),
 		b.NL(),
@@ -33,24 +33,24 @@ func installSection() []*gomd.Element {
 }
 
 func whyThisExistsSection() []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.H2("Why this exists"),
 		b.NL(),
 		b.Textln("A lot of Markdown libraries are either heavyweight, strictly spec-driven, or hard to round-trip. gomd aims to be:"),
 		b.UL(
-			b.Textln("🪶 Lightweight: small surface area, simple data model."),
-			b.Textln("⚡ Fast: a one-pass parser for the common path, with snapshot benches below."),
-			b.Textln("🧠 Practical: stable subset that round-trips well for programmatic generation and edits."),
-			b.Textln("🛑 Cancellable: both lexer and parsers respect context cancel/timeout."),
-			b.Textln("🔧 Tooling-friendly: an optional tokenize → parse pipeline with positions for editors/linters."),
+			b.Textln("Lightweight: small surface area, simple data model."),
+			b.Textln("Fast: a one-pass parser for the common path, with snapshot benches below."),
+			b.Textln("Practical: stable subset that round-trips well for programmatic generation and edits."),
+			b.Textln("Cancellable: both lexer and parsers respect context cancel/timeout."),
+			b.Textln("Tooling-friendly: an optional tokenize → parse pipeline with positions for editors/linters."),
 		),
 		b.NL(),
 	}
 }
 
 func featureSetSection() []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.H2("Feature set"),
 		b.NL(),
@@ -70,7 +70,7 @@ func featureSetSection() []*gomd.Element {
 }
 
 func benchmarksSection() []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.H2("Benchmarks (snapshot)"),
 		b.NL(),
@@ -98,7 +98,7 @@ func benchmarksSection() []*gomd.Element {
 }
 
 func parsingUsageSection() []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	parts := []*gomd.Element{
 		b.H2("Parsing: fast vs pipeline"),
 		b.NL(),
@@ -125,12 +125,12 @@ func parsingUsageSection() []*gomd.Element {
 		b.H3("Fast parser (with and without context)"),
 		b.NL(),
 		b.CodeFence("go",
-			"p := gomd.NewParser()\n"+
-				"b := gomd.Builder{}\n\n"+
+			"p := gomd.NewOnePassParser()\n"+
+				"b := gomd.NewBuilder()\n\n"+
 				"ctx := context.Background()\n"+
 				"els, err := p.ParseCtx(ctx, src)\n"+
 				"if err != nil { /* handle */ }\n\n"+
-				"md := gomd.Builder{}.Build(els...)\n\n"+
+				"md := b.Build(els...)\n\n"+
 				"// non-context:\n"+
 				"els2 := p.Parse(src)\n"+
 				"md2  := b.Build(els2...)",
@@ -140,12 +140,15 @@ func parsingUsageSection() []*gomd.Element {
 		b.H3("Pipeline (tokens + token parser)"),
 		b.NL(),
 		b.CodeFence("go",
-			"ctx := context.Background()\n\n"+
-				"toks, err := gomd.TokenizeCtx(ctx, strings.NewReader(src))\n"+
+			"l := gomd.NewLexer()\n"+
+				"tp := gomd.NewTokenParser()\n"+
+				"b := gomd.NewBuilder()\n"+
+				"ctx := context.Background()\n\n"+
+				"toks, err := l.TokenizeCtx(ctx, bytes.NewReader(md))\n"+
 				"if err != nil { /* handle */ }\n\n"+
-				"doc, err := gomd.ParseTokensCtx(ctx, toks)\n"+
+				"doc, err := tp.ParseTokensCtx(ctx, toks)\n"+
 				"if err != nil { /* handle */ }\n\n"+
-				"md := gomd.Builder{}.Build(doc.Children...)",
+				"md := b.Build(doc.Children...)",
 		),
 		b.NL(),
 		b.Italicln("Rule of thumb: prefer the fast parser for speed and simpler apps; use the pipeline when you need tokens for tooling."),
@@ -154,7 +157,7 @@ func parsingUsageSection() []*gomd.Element {
 }
 
 func whyTokensSection() []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.H2("Why tokens?"),
 		b.NL(),
@@ -172,7 +175,7 @@ func whyTokensSection() []*gomd.Element {
 }
 
 func compatibilitySection() []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.H2("Compatibility & limitations"),
 		b.NL(),
@@ -189,7 +192,7 @@ func compatibilitySection() []*gomd.Element {
 }
 
 func contributingSection() []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.H2("Contributing"),
 		b.NL(),
@@ -249,10 +252,10 @@ import (
 
 func main() {
 	brand := "My Company"
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 
 	header := []*gomd.Element{
-		b.H1(fmt.Sprintf("My %s Document", brand)),
+		b.H1(fmt.Sprintf("%s Document", brand)),
 		b.NL(),
 		b.Textln("great!"),
 		b.NL(),
@@ -286,8 +289,8 @@ import (
 )
 
 func main() {
-	b := gomd.Builder{}
-	c := gomd.Compounder{Builder: b}
+	b := gomd.NewBuilder()
+	c := gomd.NewCompounder(b)
 
 	doc := b.Build(
 		c.Compound(
@@ -312,7 +315,7 @@ import (
 )
 
 func footer(comp string) []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 	return []*gomd.Element{
 		b.Rule(),
 		b.Textln(fmt.Sprintf("Copyright %s (c) 2025 Author. All Rights Reserved.", comp)),
@@ -321,13 +324,13 @@ func footer(comp string) []*gomd.Element {
 
 func main() {
 	comp := "My Company"
-	b := gomd.Builder{}
+	b := gomd.NewBuilder()
 
 	// Compose ad-hoc + template slices
 	md := b.Build(
 		append(
 			[]*gomd.Element{
-				b.H1(fmt.Sprintf("My %s Doc", comp)),
+				b.H1(fmt.Sprintf("%s Doc", comp)),
 				b.NL(),
 				b.Textln(fmt.Sprintf("Welcome to %s document", comp)),
 				b.NL(),
@@ -357,7 +360,7 @@ import (
 )
 
 func footer(comp string) []*gomd.Element {
-	b := gomd.Builder{}
+	b := gomd.NewBuilder
 	return []*gomd.Element{
 		b.Rule(),
 		b.Textln(fmt.Sprintf("Copyright %s (c) 2025 Author. All Rights Reserved.", comp)),
@@ -366,12 +369,12 @@ func footer(comp string) []*gomd.Element {
 
 func main() {
 	comp := "My Company"
-	b := gomd.Builder{}
-	c := gomd.Compounder{Builder: b}
+	b := gomd.NewBuilder()
+	c := gomd.NewCompounder(b)
 
 	md := b.Build(
 		c.Compound(
-			c.Header1(fmt.Sprintf("My %s Doc", comp)),
+			c.Header1(fmt.Sprintf("%s Doc", comp)),
 			c.Section2("Welcome", []string{
 				fmt.Sprintf("This document is for %s.", comp),
 			}),

@@ -16,7 +16,7 @@ func makeManyLines(n int) string {
 }
 
 func TestParseCtx_Canceled_Immediate(t *testing.T) {
-	p := NewParser()
+	p := NewOnePassParser()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -30,7 +30,7 @@ func TestParseCtx_Canceled_Immediate(t *testing.T) {
 }
 
 func TestParseCtx_Canceled_Midway(t *testing.T) {
-	p := NewParser()
+	p := NewOnePassParser()
 	src := makeManyLines(50000)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -51,7 +51,7 @@ func TestParseCtx_Canceled_Midway(t *testing.T) {
 }
 
 func TestParseCtx_Timeout_Immediate(t *testing.T) {
-	p := NewParser()
+	p := NewOnePassParser()
 	ctx, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
 
@@ -62,7 +62,7 @@ func TestParseCtx_Timeout_Immediate(t *testing.T) {
 }
 
 func TestParseCtx_Timeout_Midway(t *testing.T) {
-	p := NewParser()
+	p := NewOnePassParser()
 	src := makeManyLines(50000)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Millisecond)

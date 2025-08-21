@@ -4,23 +4,18 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"unicode"
 )
 
-func (t Token) String() string {
-	return fmt.Sprintf("%s(%q)@%d:%d", t.Kind, t.Lexeme, t.Pos.Line, t.Pos.Col)
-}
-
 // Tokenize lexes from the input reader and returns a slice of tokens.
-func Tokenize(r io.Reader) ([]Token, error) {
-	return TokenizeCtx(context.Background(), r)
+func (l *Lexer) Tokenize(r io.Reader) ([]Token, error) {
+	return l.TokenizeCtx(context.Background(), r)
 }
 
 // TokenizeCtx lexes from the input reader and returns a slice of tokens while respecting context.
-func TokenizeCtx(ctx context.Context, r io.Reader) ([]Token, error) {
+func (l *Lexer) TokenizeCtx(ctx context.Context, r io.Reader) ([]Token, error) {
 	var tokens []Token
 	br := bufio.NewReader(r)
 
